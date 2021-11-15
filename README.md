@@ -161,7 +161,7 @@ $ kubeadm init --image-repository registry.aliyuncs.com/google_containers --pod-
 Your Kubernetes control-plane has initialized successfully!
 
 To start using your cluster, you need to run the following as a regular user:
-- 下面三行命令，Master节点从普通用户登录执行
+- 下面三行命令，control-plane从普通用户登录执行
   mkdir -p $HOME/.kube
   sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
   sudo chown $(id -u):$(id -g) $HOME/.kube/config
@@ -221,8 +221,9 @@ $ ctr -n k8s.io i tag --force registry.aliyuncs.com/google_containers/kube-proxy
 $ ctr -n k8s.io i tag --force registry.aliyuncs.com/google_containers/pause:3.5 k8s.gcr.io/pause:3.5
 ```
 
-- 加入Cluster（从Master节点kubeadm init的输出里直接Copy）
+- 加入Cluster
 ```diff
+- join的命令可以从kubeadm init的输出里直接copy，或者master上执行$kubeadm token create --print-join-command来得到
 $ kubeadm join 192.168.1.13:6443 --token yrrkd1.d5m6fd6stj51nkrf  --discovery-token-ca-cert-hash sha256:639025d1f27609aa5d966defbfa80e0569246c9b61c4bb37c80d56a2f0edbe3b
 [preflight] Running pre-flight checks
 [preflight] Reading configuration from the cluster...
@@ -237,7 +238,6 @@ This node has joined the cluster:
 * The Kubelet was informed of the new secure connection details.
 
 Run 'kubectl get nodes' on the control-plane to see this node join the cluster.
-
 ```
 
 ### Cluster操作
