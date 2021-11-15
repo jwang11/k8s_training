@@ -8,7 +8,9 @@ training of k8s
 ```
 Client Version: version.Info{Major:"1", Minor:"22", GitVersion:"v1.22.3", GitCommit:"c92036820499fedefec0f847e2054d824aea6cd1", GitTreeState:"clean", BuildDate:"2021-10-27T18:41:28Z", GoVersion:"go1.16.9", Compiler:"gc", Platform:"linux/amd64"}
 ```
-- 集群节点环境准备 （master和worker）
+
+### 所有集群节点
+- 集群节点环境准备
 ```diff
 - 用root账户
 $ sudo su
@@ -58,7 +60,8 @@ Kubernetes v1.22.3
 $ apt-mark hold kubeadm kubelet kubectl
 ```
 
-- master节点配置
+### Master节点
+- Master节点配置
 ```diff
 - kubeadm需要的image list
 $ kubeadm config images list
@@ -158,7 +161,7 @@ $ kubeadm init --image-repository registry.aliyuncs.com/google_containers --pod-
 Your Kubernetes control-plane has initialized successfully!
 
 To start using your cluster, you need to run the following as a regular user:
-
+- 下面三行命令，Master节点从普通用户登录执行
   mkdir -p $HOME/.kube
   sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
   sudo chown $(id -u):$(id -g) $HOME/.kube/config
@@ -175,4 +178,29 @@ Then you can join any number of worker nodes by running the following on each as
 - 下面这段命令Copy下来，worker加入Cluster时调用
 kubeadm join 192.168.1.13:6443 --token yrrkd1.d5m6fd6stj51nkrf \
         --discovery-token-ca-cert-hash sha256:639025d1f27609aa5d966defbfa80e0569246c9b61c4bb37c80d56a2f0edbe3b
+```
+- Master节点配置kubectl命令执行环境
+```
+$ mkdir -p $HOME/.kube
+$ sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+$ sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+$ kubectl get nodes
+NAME           STATUS   ROLES                  AGE   VERSION
+master.local   Ready    control-plane,master   17m   v1.22.3
+```
+- Master节点安装Flannel网路插件
+```diff
+$ kubectl apply -f https://github.com/flannel-io/flannel/blob/master/Documentation/kube-flannel.yml
+
+- 如果https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml不能直接访问
+- 下载到本地安装
+$ kubectl apply -f kube-flannel.yml
+Warning: policy/v1beta1 PodSecurityPolicy is deprecated in v1.21+, unavailable in v1.25+
+podsecuritypolicy.policy/psp.flannel.unprivileged created
+clusterrole.rbac.authorization.k8s.io/flannel created
+clusterrolebinding.rbac.authorization.k8s.io/flannel created
+serviceaccount/flannel created
+configmap/kube-flannel-cfg created
+daemonset.apps/kube-flannel-ds created
 ```
