@@ -243,6 +243,11 @@ Run 'kubectl get nodes' on the control-plane to see this node join the cluster.
 ### Cluster操作
 从Control Plane（Master节点上普通用户登录的终端）操作cluster
 ```diff
+jwang@master:~$ kubectl get node -o wide
+NAME           STATUS   ROLES                  AGE    VERSION   INTERNAL-IP    EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME
+jwang-pc2      Ready    <none>                 49m    v1.22.3   192.168.1.10   <none>        Ubuntu 20.04.2 LTS   5.4.0-90-generic    containerd://1.5.5
+master.local   Ready    control-plane,master   169m   v1.22.3   192.168.1.13   <none>        Ubuntu 20.04.3 LTS   5.11.0-40-generic   containerd://1.5.5
+
 $ kubectl get pod -A -o wide
 NAMESPACE     NAME                                   READY   STATUS    RESTARTS   AGE    IP             NODE           NOMINATED NODE   READINESS GATES
 kube-system   coredns-7f6cbbb7b8-bc2qc               1/1     Running   0          160m   10.244.0.2     master.local   <none>           <none>
