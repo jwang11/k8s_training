@@ -189,7 +189,7 @@ $ kubectl get nodes
 NAME           STATUS   ROLES                  AGE   VERSION
 master.local   Ready    control-plane,master   17m   v1.22.3
 ```
-- Master节点安装Flannel网路插件
+- Master节点安装Flannel网络插件
 ```diff
 $ kubectl apply -f https://github.com/flannel-io/flannel/blob/master/Documentation/kube-flannel.yml
 
