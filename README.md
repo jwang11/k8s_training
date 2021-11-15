@@ -8,9 +8,7 @@ training of k8s
 ```
 Client Version: version.Info{Major:"1", Minor:"22", GitVersion:"v1.22.3", GitCommit:"c92036820499fedefec0f847e2054d824aea6cd1", GitTreeState:"clean", BuildDate:"2021-10-27T18:41:28Z", GoVersion:"go1.16.9", Compiler:"gc", Platform:"linux/amd64"}
 ```
-
-### 所有集群节点
-- 集群节点环境准备
+### 1. 集群节点环境准备
 ```diff
 - 用root账户
 $ sudo su
@@ -60,7 +58,10 @@ Kubernetes v1.22.3
 $ apt-mark hold kubeadm kubelet kubectl
 ```
 
-### Master节点
+### 2. Master节点
+- 集群节点环境准备
+参照第一章的步骤
+
 - Master节点配置
 ```diff
 - 检查kubeadm需要的image list
@@ -189,7 +190,7 @@ $ kubectl get nodes
 NAME           STATUS   ROLES                  AGE   VERSION
 master.local   Ready    control-plane,master   17m   v1.22.3
 ```
-- Master节点安装Flannel网络插件
+- master节点安装Flannel网络插件
 ```diff
 $ kubectl apply -f https://github.com/flannel-io/flannel/blob/master/Documentation/kube-flannel.yml
 
@@ -205,7 +206,16 @@ configmap/kube-flannel-cfg created
 daemonset.apps/kube-flannel-ds created
 ```
 
-### Worker节点
+- Master节点允许执行用户Pod (可选)
+```diff
+$ kubectl taint nodes --all node-role.kubernetes.io/master-
+```
+至此，master节点配置全部完成，cluster已经建立好，等待worker节点加入
+
+### 3. Worker节点
+- 集群节点环境准备
+参照第一章的步骤
+
 - Worker节点配置
 ```diff
 - Worker节点不需要全部kubeadm config images list，仅需要两个
@@ -240,7 +250,7 @@ This node has joined the cluster:
 Run 'kubectl get nodes' on the control-plane to see this node join the cluster.
 ```
 
-### Cluster操作
+### 4. Cluster操作
 从Control Plane（Master节点上普通用户登录的终端）操作cluster
 ```diff
 jwang@master:~$ kubectl get node -o wide
