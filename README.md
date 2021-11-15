@@ -8,6 +8,22 @@ training of k8s
 ```
 Client Version: version.Info{Major:"1", Minor:"22", GitVersion:"v1.22.3", GitCommit:"c92036820499fedefec0f847e2054d824aea6cd1", GitTreeState:"clean", BuildDate:"2021-10-27T18:41:28Z", GoVersion:"go1.16.9", Compiler:"gc", Platform:"linux/amd64"}
 ```
-- 
+- 节点环境准备 （master和worker）
+```diff
+- 添加阿里源
+$ curl https://mirrors.aliyun.com/kubernetes/apt/doc/apt-key.gpg | sudo apt-key add - 
+$ sudo apt-add-repository "deb https://mirrors.aliyun.com/kubernetes/apt/ kubernetes-xenial main"
+
+- 安装k8s
+$ sudo apt install kubelet kubeadm kubectl
+
+- 检查版本
+$ kubelet --version
+Kubernetes v1.22.3
+
+- 阻止K8S更新
+sudo apt-mark hold kubeadm kubelet kubectl
+```
+
 
 
