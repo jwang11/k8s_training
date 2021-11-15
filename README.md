@@ -3,8 +3,8 @@ training of k8s
 
 ## Installation
 在Ubuntu 20.04下，No Docker模式国内安装最新K8S（1.22.3），网络插件flannel
->> master:192.168.1.13 <br>
->> worker:192.168.1.10
+> master:192.168.1.13 <br>
+> worker:192.168.1.10
 
 ### 1. 集群节点环境准备
 ```diff
