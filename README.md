@@ -104,7 +104,7 @@ k8s.gcr.io/pause                                                  3.5           
 registry.aliyuncs.com/google_containers/pause                     3.5                 ed210e3e4a5ba       301kB
 ```
 
-- Master节点初始化cluster
+- Master节点初始化集群（cluster）
 ```diff
 - 因为准备用flannel网络插件，设置--pod-network-cidr=10.244.0.0/16
 $ kubeadm init --image-repository registry.aliyuncs.com/google_containers --pod-network-cidr=10.244.0.0/16
@@ -250,7 +250,7 @@ This node has joined the cluster:
 Run 'kubectl get nodes' on the control-plane to see this node join the cluster.
 ```
 
-### 4. Cluster操作
+### 4. 操作集群（Cluster）
 从Control Plane（Master节点上普通用户登录的终端）操作cluster
 ```diff
 jwang@master:~$ kubectl get node -o wide
