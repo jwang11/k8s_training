@@ -209,9 +209,10 @@ daemonset.apps/kube-flannel-ds created
 - Worker节点配置
 ```diff
 - Worker节点不需要全部kubeadm config images list，仅需要两个
-- k8s.gcr.io/kube-proxy:v1.22.3
-- k8s.gcr.io/pause:3.5
+ k8s.gcr.io/kube-proxy:v1.22.3
+ k8s.gcr.io/pause:3.5
 
+- 从阿里库pull image
 $ crictl --runtime-endpoint unix:///run/containerd/containerd.sock pull registry.aliyuncs.com/google_containers/kube-proxy:v1.22.3
 $ crictl --runtime-endpoint  unix:///run/containerd/containerd.sock pull registry.aliyuncs.com/google_containers/pause:3.5
 
