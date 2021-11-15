@@ -8,7 +8,7 @@ training of k8s
 
 ### 1. 集群节点环境准备
 ```diff
-- 用root账户
+- 切换到root
 $ sudo su
 
 - 关闭swap
@@ -41,7 +41,7 @@ $ containerd config default > /etc/containerd/config.toml
 $ systemctl restart containerd
 $ systemctl enable containerd 
 
-- 添加阿里源
+- 添加Ubuntu阿里源
 $ curl https://mirrors.aliyun.com/kubernetes/apt/doc/apt-key.gpg | apt-key add - 
 $ apt-add-repository "deb https://mirrors.aliyun.com/kubernetes/apt/ kubernetes-xenial main"
 
@@ -72,10 +72,10 @@ k8s.gcr.io/pause:3.5
 k8s.gcr.io/etcd:3.5.0-0
 k8s.gcr.io/coredns/coredns:v1.8.4
 
-- 从国内阿里库Pull上面的image list
+- 从阿里库Pull上面的image list
 $ kubeadm config images pull --image-repository registry.aliyuncs.com/google_containers
 
-- 打tag到k8s.gcr.io（这一步是必须的，否则kubeadm init依旧会到k8s.gcr.io下载镜像）
+- 给Image打k8s.gcr.io标签（这一步是必须的，否则kubeadm init依旧会到k8s.gcr.io下载镜像）
 $ ctr -n k8s.io i tag --force registry.aliyuncs.com/google_containers/pause:3.5 k8s.gcr.io/pause:3.5
 $ ctr -n k8s.io i tag --force registry.aliyuncs.com/google_containers/kube-scheduler:v1.22.3 k8s.gcr.io/kube-scheduler:v1.22.3
 $ ctr -n k8s.io i tag --force registry.aliyuncs.com/google_containers/kube-proxy:v1.22.3 k8s.gcr.io/kube-proxy:v1.22.3
@@ -84,7 +84,7 @@ $ ctr -n k8s.io i tag --force registry.aliyuncs.com/google_containers/kube-apise
 $ ctr -n k8s.io i tag --force registry.aliyuncs.com/google_containers/etcd:3.5.0-0  k8s.gcr.io/etcd:3.5.0-0
 $ ctr -n k8s.io i tag --force registry.aliyuncs.com/google_containers/coredns:v1.8.4  k8s.gcr.io/coredns:v1.8.4
 
-- 检查tag后的image list
+- 检查image list，应该都有k8s.gcr.io标签
 $ crictl --runtime-endpoint unix:///run/containerd/containerd.sock image
 k8s.gcr.io/coredns                                                v1.8.4              8d147537fb7d1       13.7MB
 registry.aliyuncs.com/google_containers/coredns                   v1.8.4              8d147537fb7d1       13.7MB
@@ -102,7 +102,7 @@ k8s.gcr.io/pause                                                  3.5           
 registry.aliyuncs.com/google_containers/pause                     3.5                 ed210e3e4a5ba       301kB
 ```
 
-- Master节点初始化集群（cluster）
+- 初始化集群（cluster）
 ```diff
 - 因为准备用flannel网络插件，设置--pod-network-cidr=10.244.0.0/16
 $ kubeadm init --image-repository registry.aliyuncs.com/google_containers --pod-network-cidr=10.244.0.0/16
@@ -178,8 +178,9 @@ Then you can join any number of worker nodes by running the following on each as
 kubeadm join 192.168.1.13:6443 --token yrrkd1.d5m6fd6stj51nkrf \
         --discovery-token-ca-cert-hash sha256:639025d1f27609aa5d966defbfa80e0569246c9b61c4bb37c80d56a2f0edbe3b
 ```
-- Master节点配置kubectl命令执行环境
+- 配置control-plane执行环境
 ```
+- 注意：control-plane使用普通用户
 $ mkdir -p $HOME/.kube
 $ sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 $ sudo chown $(id -u):$(id -g) $HOME/.kube/config
@@ -188,7 +189,7 @@ $ kubectl get nodes
 NAME           STATUS   ROLES                  AGE   VERSION
 master.local   Ready    control-plane,master   17m   v1.22.3
 ```
-- master节点安装Flannel网络插件
+- 安装Flannel网络插件
 ```diff
 $ kubectl apply -f https://github.com/flannel-io/flannel/blob/master/Documentation/kube-flannel.yml
 
@@ -204,7 +205,7 @@ configmap/kube-flannel-cfg created
 daemonset.apps/kube-flannel-ds created
 ```
 
-- Master节点允许执行用户Pod (可选)
+- 允许master节点执行用户Pod (可选)
 ```diff
 $ kubectl taint nodes --all node-role.kubernetes.io/master-
 ```
@@ -212,7 +213,7 @@ $ kubectl taint nodes --all node-role.kubernetes.io/master-
 
 ### 3. Worker节点
 - 集群节点环境准备
-参照第一章的步骤
+参照第1章的步骤
 
 - Worker节点配置
 ```diff
@@ -229,7 +230,7 @@ $ ctr -n k8s.io i tag --force registry.aliyuncs.com/google_containers/kube-proxy
 $ ctr -n k8s.io i tag --force registry.aliyuncs.com/google_containers/pause:3.5 k8s.gcr.io/pause:3.5
 ```
 
-- 加入Cluster
+- 加入集群（cluster）
 ```diff
 - join的命令可以从kubeadm init的输出里直接copy，或者master上执行$kubeadm token create --print-join-command来得到
 $ kubeadm join 192.168.1.13:6443 --token yrrkd1.d5m6fd6stj51nkrf  --discovery-token-ca-cert-hash sha256:639025d1f27609aa5d966defbfa80e0569246c9b61c4bb37c80d56a2f0edbe3b
@@ -249,7 +250,7 @@ Run 'kubectl get nodes' on the control-plane to see this node join the cluster.
 ```
 
 ### 4. 操作集群（Cluster）
-从Control Plane（Master节点上普通用户登录的终端）操作cluster
+从Control Plane（master节点上普通用户登录的终端）操作cluster
 ```diff
 jwang@master:~$ kubectl get node -o wide
 NAME           STATUS   ROLES                  AGE    VERSION   INTERNAL-IP    EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME
