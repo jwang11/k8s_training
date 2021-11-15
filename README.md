@@ -63,7 +63,7 @@ $ apt-mark hold kubeadm kubelet kubectl
 ### Master节点
 - Master节点配置
 ```diff
-- kubeadm需要的image list
+- 检查kubeadm需要的image list
 $ kubeadm config images list
 k8s.gcr.io/kube-apiserver:v1.22.3
 k8s.gcr.io/kube-controller-manager:v1.22.3
@@ -86,7 +86,7 @@ $ ctr -n k8s.io i tag --force registry.aliyuncs.com/google_containers/etcd:3.5.0
 $ ctr -n k8s.io i tag --force registry.aliyuncs.com/google_containers/coredns:v1.8.4  k8s.gcr.io/coredns:v1.8.4
 
 - 检查tag后的image list
-$ crictl image list
+$ crictl --runtime-endpoint unix:///run/containerd/containerd.sock image
 k8s.gcr.io/coredns                                                v1.8.4              8d147537fb7d1       13.7MB
 registry.aliyuncs.com/google_containers/coredns                   v1.8.4              8d147537fb7d1       13.7MB
 k8s.gcr.io/etcd                                                   3.5.0-0             0048118155842       99.9MB
@@ -203,4 +203,55 @@ clusterrolebinding.rbac.authorization.k8s.io/flannel created
 serviceaccount/flannel created
 configmap/kube-flannel-cfg created
 daemonset.apps/kube-flannel-ds created
+```
+
+### Worker节点
+- Worker节点配置
+```diff
+- Worker节点不需要全部kubeadm config images list，仅需要两个
+- k8s.gcr.io/kube-proxy:v1.22.3
+- k8s.gcr.io/pause:3.5
+
+$ crictl --runtime-endpoint unix:///run/containerd/containerd.sock pull registry.aliyuncs.com/google_containers/kube-proxy:v1.22.3
+$ crictl --runtime-endpoint  unix:///run/containerd/containerd.sock pull registry.aliyuncs.com/google_containers/pause:3.5
+
+- 给Image打上k8s.gcr.io tag
+$ ctr -n k8s.io i tag --force registry.aliyuncs.com/google_containers/kube-proxy:v1.22.3 k8s.gcr.io/kube-proxy:v1.22.3
+$ ctr -n k8s.io i tag --force registry.aliyuncs.com/google_containers/pause:3.5 k8s.gcr.io/pause:3.5
+```
+
+- 加入Cluster（从Master节点kubeadm init的输出里直接Copy）
+```diff
+$ kubeadm join 192.168.1.13:6443 --token yrrkd1.d5m6fd6stj51nkrf  --discovery-token-ca-cert-hash sha256:639025d1f27609aa5d966defbfa80e0569246c9b61c4bb37c80d56a2f0edbe3b
+[preflight] Running pre-flight checks
+[preflight] Reading configuration from the cluster...
+[preflight] FYI: You can look at this config file with 'kubectl -n kube-system get cm kubeadm-config -o yaml'
+[kubelet-start] Writing kubelet configuration to file "/var/lib/kubelet/config.yaml"
+[kubelet-start] Writing kubelet environment file with flags to file "/var/lib/kubelet/kubeadm-flags.env"
+[kubelet-start] Starting the kubelet
+[kubelet-start] Waiting for the kubelet to perform the TLS Bootstrap...
+
+This node has joined the cluster:
+* Certificate signing request was sent to apiserver and a response was received.
+* The Kubelet was informed of the new secure connection details.
+
+Run 'kubectl get nodes' on the control-plane to see this node join the cluster.
+
+```
+
+### Cluster操作
+从Control Plane（Master节点上普通用户登录的终端）操作cluster
+```diff
+$ kubectl get pod -A -o wide
+NAMESPACE     NAME                                   READY   STATUS    RESTARTS   AGE    IP             NODE           NOMINATED NODE   READINESS GATES
+kube-system   coredns-7f6cbbb7b8-bc2qc               1/1     Running   0          160m   10.244.0.2     master.local   <none>           <none>
+kube-system   coredns-7f6cbbb7b8-g7xr5               1/1     Running   0          160m   10.244.0.3     master.local   <none>           <none>
+kube-system   etcd-master.local                      1/1     Running   3          160m   192.168.1.13   master.local   <none>           <none>
+kube-system   kube-apiserver-master.local            1/1     Running   3          160m   192.168.1.13   master.local   <none>           <none>
+kube-system   kube-controller-manager-master.local   1/1     Running   3          160m   192.168.1.13   master.local   <none>           <none>
+kube-system   kube-flannel-ds-qv9zv                  1/1     Running   0          40m    192.168.1.10   jwang-pc2      <none>           <none>
+kube-system   kube-flannel-ds-zz879                  1/1     Running   0          132m   192.168.1.13   master.local   <none>           <none>
+kube-system   kube-proxy-mlxcd                       1/1     Running   0          40m    192.168.1.10   jwang-pc2      <none>           <none>
+kube-system   kube-proxy-q4jjz                       1/1     Running   0          160m   192.168.1.13   master.local   <none>           <none>
+kube-system   kube-scheduler-master.local            1/1     Running   3          160m   192.168.1.13   master.local   <none>           <none>
 ```
