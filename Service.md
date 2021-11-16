@@ -19,8 +19,9 @@ Service目前可定义为5个大类。通过spec.type属性可定义ClusterIP、
 - ClusterIP-无头Service（headless service）：这种方式不会分配ClusterIP地址，也不通过kube-proxy进行反向代理和负载均衡，而是通过DNS提供稳定的网络ID来进行访问。DNS会将无头Service的后端直接解析为Pod的IP地址列表。这种类型的Service只能在集群内的Pod中访问，集群中的机器无法直接访问。这种方式主要供StatefulSet使用。
 - ExternalName：和上面提到的3种向外发布的方式不太一样，在那3种方式中都将Kubernetes集群内部的服务发布出去，而ExternalName则将外部服务引入进来，通过一定格式映射到Kubernetes集群，从而为集群内部提供服务。
 
-### ClusterIP
+### ClusterIP服务
 - 通过deployment创建一组pods，标签example=forservice
+*`example_deployment.yml`*
 ```diff
 apiVersion: apps/v1
 kind: Deployment
@@ -47,6 +48,7 @@ spec:
             containerPort: 80
 ```
 - 再单独创建一个Pod，打上标签example=forservice
+*`example_pod.yml`*
 ```diff
 apiVersion: v1
 kind: Pod
@@ -65,8 +67,13 @@ spec:
       - name: http
         containerPort: 80
 ```
-现在有4个标签为example=forservice的Pods
+
+执行后，现在有4个标签为example=forservice的Pods
 ```diff
+$ kubectl apply -f example_deployment.yml,example_pod.yml
+
++ 等一会儿，让Pod全部起来
+
 $ kubectl get pods
 NAME                              READY   STATUS    RESTARTS   AGE
 examplepod                        1/1     Running   0          88m
@@ -76,6 +83,7 @@ exampleservice-78d6997f86-wsjsl   1/1     Running   0          106m
 ```
 
 - 创建ClusterIP服务，关联到标签为example=forservice的Pods
+*`clusterip_service.yml`*
 ```diff
 kind: Service
 apiVersion: v1
@@ -93,6 +101,7 @@ spec:
 
 - 简单测试
 ```diff
+$ kubectl appy -f clusterip_service.yml
 $ kubectl get service -o wide
 NAME               TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE   SELECTOR
 clusteripservice   ClusterIP   10.110.244.138   <none>        8080/TCP         89m   example=forservice
@@ -179,7 +188,7 @@ Chain KUBE-SVC-IAEKQ2XJ6CG3CMAV (1 references)
 
 - 创建一个nodeport service
 
-**`nodeport_service.yml`**
+*`nodeport_service.yml`*
 ```diff
 kind: Service
 apiVersion: v1
