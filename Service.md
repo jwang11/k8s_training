@@ -243,7 +243,7 @@ $ curl 192.168.1.10:30001
 
 因为无头Service不提供负载均衡功能，所以开发人员可以自己控制负载均衡策略，降低与Kubernetes系统的耦合性。无头Service主要供StatefulSet使用。
 
-- 创建Headless服务
+- 3. 创建Headless服务
 
 ***`headless_service.yml`***
 ```diff
