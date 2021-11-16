@@ -172,3 +172,26 @@ Chain KUBE-SVC-IAEKQ2XJ6CG3CMAV (1 references)
     0     0 KUBE-SEP-IWJCVIOI5A2IP7ND  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/clusteripservice */ statistic mode random probability 0.50000000000
     0     0 KUBE-SEP-TME5DB4L4HUUFKUT  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/clusteripservice */
 ```
+
+### Nodeport服务
+
+通过NodePort发布的方式基于通过ClusterIP发布的方式，先生成一个ClusterIP，然后将这个虚拟IP地址及端口映射到各个集群机器（即Master和Node）的指定端口上，这样，Kubernetes集群外部的机器就可以通过“NodeIP:端口”方式访问Service。之前已经提到过，ClusterIP本身已经提供了负载均衡功能，所以在NodePort模式下，不管访问的是集群中的哪台机器，效果都是一模一样的。也就是说，都先由某台机器通过映射关系转发到ClusterIP，然后由ClusterIP通过比例随机算法转发到对应Pod。
+
+- 创建一个nodeport service
+
+===nodeport_service.yml===
+```diff
+kind: Service
+apiVersion: v1
+metadata:
+  name: nodeportservice
+spec:
+  selector:
+    example: forservice
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 80
+      nodePort: 30001
+  type: NodePort
+```
