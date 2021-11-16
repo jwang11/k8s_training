@@ -135,148 +135,35 @@ $ curl 10.110.244.138:8080
 为什么这4个Pods关联了Service以后，就可以实现负载均衡了呢？在每个节点中都有一个叫作kube-proxy的组件，这个组件识别Service和Pod的动态变化，并将变化的地址信息写入本地的IPTables中。而IPTables使用NAT等技术将virtualIP的流量转至Endpoint。默认情况下，Kubernetes使用的是IPTables模式
 ```diff
 $ sudo iptables -L -v -n -t natsudo iptables -L -v -n -t nat
-Chain PREROUTING (policy ACCEPT 2 packets, 627 bytes)
- pkts bytes target     prot opt in     out     source               destination
- 7935  617K KUBE-SERVICES  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kubernetes service portals */
-
-Chain INPUT (policy ACCEPT 2 packets, 627 bytes)
- pkts bytes target     prot opt in     out     source               destination
-
-Chain OUTPUT (policy ACCEPT 831 packets, 50719 bytes)
- pkts bytes target     prot opt in     out     source               destination
- 366K   22M KUBE-SERVICES  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kubernetes service portals */
-
-Chain POSTROUTING (policy ACCEPT 827 packets, 50479 bytes)
- pkts bytes target     prot opt in     out     source               destination
- 498K   31M KUBE-POSTROUTING  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kubernetes postrouting rules */
- 498K   31M LIBVIRT_PRT  all  --  *      *       0.0.0.0/0            0.0.0.0/0
-76716 4660K RETURN     all  --  *      *       10.244.0.0/16        10.244.0.0/16
- 1272 76464 MASQUERADE  all  --  *      *       10.244.0.0/16       !224.0.0.0/4          random-fully
-    0     0 RETURN     all  --  *      *      !10.244.0.0/16        10.244.0.0/24
-    0     0 MASQUERADE  all  --  *      *      !10.244.0.0/16        10.244.0.0/16        random-fully
-
-Chain KUBE-KUBELET-CANARY (0 references)
- pkts bytes target     prot opt in     out     source               destination
-
-Chain KUBE-MARK-DROP (0 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 MARK       all  --  *      *       0.0.0.0/0            0.0.0.0/0            MARK or 0x8000
-
-Chain KUBE-MARK-MASQ (22 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 MARK       all  --  *      *       0.0.0.0/0            0.0.0.0/0            MARK or 0x4000
-
-Chain KUBE-NODEPORTS (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-SVC-I54GZH7ZC463PLQ6  tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/nodeportservice */ tcp dpt:30001
-
-Chain KUBE-POSTROUTING (1 references)
- pkts bytes target     prot opt in     out     source               destination
-  831 50719 RETURN     all  --  *      *       0.0.0.0/0            0.0.0.0/0            mark match ! 0x4000/0x4000
-    0     0 MARK       all  --  *      *       0.0.0.0/0            0.0.0.0/0            MARK xor 0x4000
-    0     0 MASQUERADE  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kubernetes service traffic requiring SNAT */ random-fully
-
-Chain KUBE-PROXY-CANARY (0 references)
- pkts bytes target     prot opt in     out     source               destination
-
-Chain KUBE-SEP-6E7XQMQ4RAYOWTTM (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  all  --  *      *       10.244.0.3           0.0.0.0/0            /* kube-system/kube-dns:dns */
-    0     0 DNAT       udp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kube-system/kube-dns:dns */ udp to:10.244.0.3:53
-
-Chain KUBE-SEP-DCC4L7OVPB5CTGHJ (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  all  --  *      *       10.244.1.7           0.0.0.0/0            /* default/nodeportservice */
-    0     0 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/nodeportservice */ tcp to:10.244.1.7:80
-
-Chain KUBE-SEP-IT2ZTR26TO4XFPTO (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  all  --  *      *       10.244.0.2           0.0.0.0/0            /* kube-system/kube-dns:dns-tcp */
-    0     0 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kube-system/kube-dns:dns-tcp */ tcp to:10.244.0.2:53
-
+...
 Chain KUBE-SEP-IWJCVIOI5A2IP7ND (1 references)
  pkts bytes target     prot opt in     out     source               destination
     0     0 KUBE-MARK-MASQ  all  --  *      *       10.244.1.7           0.0.0.0/0            /* default/clusteripservice */
     0     0 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/clusteripservice */ tcp to:10.244.1.7:80
-Chain KUBE-SEP-N4G2XR5TDX7PQE7P (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  all  --  *      *       10.244.0.2           0.0.0.0/0            /* kube-system/kube-dns:metrics */
-    0     0 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kube-system/kube-dns:metrics */ tcp to:10.244.0.2:9153
-
-Chain KUBE-SEP-QXNCXG4LOSA2TZAQ (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  all  --  *      *       10.244.1.8           0.0.0.0/0            /* default/nodeportservice */
-    0     0 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/nodeportservice */ tcp to:10.244.1.8:80
 
 Chain KUBE-SEP-TME5DB4L4HUUFKUT (1 references)
  pkts bytes target     prot opt in     out     source               destination
     0     0 KUBE-MARK-MASQ  all  --  *      *       10.244.1.8           0.0.0.0/0            /* default/clusteripservice */
     0     0 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/clusteripservice */ tcp to:10.244.1.8:80
 
-Chain KUBE-SEP-UKJZAFLCNEDPWYJU (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  all  --  *      *       10.244.1.6           0.0.0.0/0            /* default/nodeportservice */
-    0     0 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/nodeportservice */ tcp to:10.244.1.6:80
-
 Chain KUBE-SEP-V3FKGIPPTFTFWTFR (1 references)
  pkts bytes target     prot opt in     out     source               destination
     0     0 KUBE-MARK-MASQ  all  --  *      *       10.244.1.6           0.0.0.0/0            /* default/clusteripservice */
     0     0 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/clusteripservice */ tcp to:10.244.1.6:80
 
+- 步骤3， 这里出现具体IP地址
 Chain KUBE-SEP-XQLVMUS2B5RDCPB3 (1 references)
  pkts bytes target     prot opt in     out     source               destination
     0     0 KUBE-MARK-MASQ  all  --  *      *       10.244.1.5           0.0.0.0/0            /* default/clusteripservice */
     0     0 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/clusteripservice */ tcp to:10.244.1.5:80
 
-Chain KUBE-SEP-XWFENG4R272LDJ7S (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  all  --  *      *       192.168.1.13         0.0.0.0/0            /* default/kubernetes:https */
-    0     0 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/kubernetes:https */ tcp to:192.168.1.13:6443
-
-Chain KUBE-SEP-YIL6JZP7A3QYXJU2 (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  all  --  *      *       10.244.0.2           0.0.0.0/0            /* kube-system/kube-dns:dns */
-    0     0 DNAT       udp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kube-system/kube-dns:dns */ udp to:10.244.0.2:53
-
-Chain KUBE-SEP-ZCTTZSGQSZOC54R4 (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  all  --  *      *       10.244.1.5           0.0.0.0/0            /* default/nodeportservice */
-    0     0 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/nodeportservice */ tcp to:10.244.1.5:80
-
-Chain KUBE-SEP-ZP3FB6NMPNCO4VBJ (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  all  --  *      *       10.244.0.3           0.0.0.0/0            /* kube-system/kube-dns:metrics */
-    0     0 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kube-system/kube-dns:metrics */ tcp to:10.244.0.3:9153
-
-Chain KUBE-SEP-ZXMNUKOKXUTL2MK2 (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  all  --  *      *       10.244.0.3           0.0.0.0/0            /* kube-system/kube-dns:dns-tcp */
-    0     0 DNAT       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kube-system/kube-dns:dns-tcp */ tcp to:10.244.0.3:53
+- 步骤1，KUBE-SERVICES转到KUBE-SVC-IAEKQ2XJ6CG3CMAV
 Chain KUBE-SERVICES (2 references)
  pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-SVC-NPX46M4PTMTKRN6Y  tcp  --  *      *       0.0.0.0/0            10.96.0.1            /* default/kubernetes:https cluster IP */ tcp dpt:443
-    0     0 KUBE-SVC-TCOU7JCQXEZGVUNU  udp  --  *      *       0.0.0.0/0            10.96.0.10           /* kube-system/kube-dns:dns cluster IP */ udp dpt:53
-    0     0 KUBE-SVC-ERIFXISQEP7F7OF4  tcp  --  *      *       0.0.0.0/0            10.96.0.10           /* kube-system/kube-dns:dns-tcp cluster IP */ tcp dpt:53
-    0     0 KUBE-SVC-JD5MR3NA4I4DYORP  tcp  --  *      *       0.0.0.0/0            10.96.0.10           /* kube-system/kube-dns:metrics cluster IP */ tcp dpt:9153
     0     0 KUBE-SVC-IAEKQ2XJ6CG3CMAV  tcp  --  *      *       0.0.0.0/0            10.110.244.138       /* default/clusteripservice cluster IP */ tcp dpt:8080
-    0     0 KUBE-SVC-I54GZH7ZC463PLQ6  tcp  --  *      *       0.0.0.0/0            10.98.126.255        /* default/nodeportservice cluster IP */ tcp dpt:8080
-  636 38560 KUBE-NODEPORTS  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kubernetes service nodeports; NOTE: this must be the last rule in this chain */ ADDRTYPE match dst-type LOCAL
 
-Chain KUBE-SVC-ERIFXISQEP7F7OF4 (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  tcp  --  *      *      !10.244.0.0/16        10.96.0.10           /* kube-system/kube-dns:dns-tcp cluster IP */ tcp dpt:53
-    0     0 KUBE-SEP-IT2ZTR26TO4XFPTO  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kube-system/kube-dns:dns-tcp */ statistic mode random probability 0.50000000000
-    0     0 KUBE-SEP-ZXMNUKOKXUTL2MK2  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kube-system/kube-dns:dns-tcp */
 
-Chain KUBE-SVC-I54GZH7ZC463PLQ6 (2 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  tcp  --  *      *      !10.244.0.0/16        10.98.126.255        /* default/nodeportservice cluster IP */ tcp dpt:8080
-    0     0 KUBE-MARK-MASQ  tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/nodeportservice */ tcp dpt:30001
-    0     0 KUBE-SEP-ZCTTZSGQSZOC54R4  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/nodeportservice */ statistic mode random probability 0.25000000000
-    0     0 KUBE-SEP-UKJZAFLCNEDPWYJU  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/nodeportservice */ statistic mode random probability 0.33333333349
-    0     0 KUBE-SEP-DCC4L7OVPB5CTGHJ  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/nodeportservice */ statistic mode random probability 0.50000000000
-    0     0 KUBE-SEP-QXNCXG4LOSA2TZAQ  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/nodeportservice */
-
+- 步骤2，KUBE-SVC-IAEKQ2XJ6CG3CMAV按照random probability模式做LB访问，如KUBE-SEP-XQLVMUS2B5RDCPB3有20%几率
 Chain KUBE-SVC-IAEKQ2XJ6CG3CMAV (1 references)
  pkts bytes target     prot opt in     out     source               destination
     0     0 KUBE-MARK-MASQ  tcp  --  *      *      !10.244.0.0/16        10.110.244.138       /* default/clusteripservice cluster IP */ tcp dpt:8080
@@ -284,30 +171,4 @@ Chain KUBE-SVC-IAEKQ2XJ6CG3CMAV (1 references)
     0     0 KUBE-SEP-V3FKGIPPTFTFWTFR  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/clusteripservice */ statistic mode random probability 0.33333333349
     0     0 KUBE-SEP-IWJCVIOI5A2IP7ND  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/clusteripservice */ statistic mode random probability 0.50000000000
     0     0 KUBE-SEP-TME5DB4L4HUUFKUT  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/clusteripservice */
-
-Chain KUBE-SVC-JD5MR3NA4I4DYORP (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  tcp  --  *      *      !10.244.0.0/16        10.96.0.10           /* kube-system/kube-dns:metrics cluster IP */ tcp dpt:9153
-    0     0 KUBE-SEP-N4G2XR5TDX7PQE7P  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kube-system/kube-dns:metrics */ statistic mode random probability 0.50000000000
-    0     0 KUBE-SEP-ZP3FB6NMPNCO4VBJ  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kube-system/kube-dns:metrics */
-
-Chain KUBE-SVC-NPX46M4PTMTKRN6Y (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  tcp  --  *      *      !10.244.0.0/16        10.96.0.1            /* default/kubernetes:https cluster IP */ tcp dpt:443
-    0     0 KUBE-SEP-XWFENG4R272LDJ7S  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/kubernetes:https */
-
-Chain KUBE-SVC-TCOU7JCQXEZGVUNU (1 references)
- pkts bytes target     prot opt in     out     source               destination
-    0     0 KUBE-MARK-MASQ  udp  --  *      *      !10.244.0.0/16        10.96.0.10           /* kube-system/kube-dns:dns cluster IP */ udp dpt:53
-    0     0 KUBE-SEP-YIL6JZP7A3QYXJU2  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kube-system/kube-dns:dns */ statistic mode random probability 0.50000000000
-    0     0 KUBE-SEP-6E7XQMQ4RAYOWTTM  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* kube-system/kube-dns:dns */
-
-Chain LIBVIRT_PRT (1 references)
- pkts bytes target     prot opt in     out     source               destination
-   80  5815 RETURN     all  --  *      *       192.168.122.0/24     224.0.0.0/24
-    0     0 RETURN     all  --  *      *       192.168.122.0/24     255.255.255.255
-    0     0 MASQUERADE  tcp  --  *      *       192.168.122.0/24    !192.168.122.0/24     masq ports: 1024-65535
-    0     0 MASQUERADE  udp  --  *      *       192.168.122.0/24    !192.168.122.0/24     masq ports: 1024-65535
-    0     0 MASQUERADE  all  --  *      *       192.168.122.0/24    !192.168.122.0/24
-```
 ```
