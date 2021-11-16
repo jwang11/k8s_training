@@ -179,7 +179,7 @@ Chain KUBE-SVC-IAEKQ2XJ6CG3CMAV (1 references)
 
 - 创建一个nodeport service
 
-===nodeport_service.yml===
+**`nodeport_service.yml`**
 ```diff
 kind: Service
 apiVersion: v1
