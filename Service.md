@@ -19,7 +19,7 @@ Service目前可定义为5个大类。通过spec.type属性可定义ClusterIP、
 - ClusterIP-无头Service（headless service）：这种方式不会分配ClusterIP地址，也不通过kube-proxy进行反向代理和负载均衡，而是通过DNS提供稳定的网络ID来进行访问。DNS会将无头Service的后端直接解析为Pod的IP地址列表。这种类型的Service只能在集群内的Pod中访问，集群中的机器无法直接访问。这种方式主要供StatefulSet使用。
 - ExternalName：和上面提到的3种向外发布的方式不太一样，在那3种方式中都将Kubernetes集群内部的服务发布出去，而ExternalName则将外部服务引入进来，通过一定格式映射到Kubernetes集群，从而为集群内部提供服务。
 
-### ClusterIP服务
+### 1. ClusterIP服务
 - 通过deployment创建一组pods，标签example=forservice
 
 *`example_deployment.yml`*
@@ -185,7 +185,7 @@ Chain KUBE-SVC-IAEKQ2XJ6CG3CMAV (1 references)
     0     0 KUBE-SEP-TME5DB4L4HUUFKUT  all  --  *      *       0.0.0.0/0            0.0.0.0/0            /* default/clusteripservice */
 ```
 
-### Nodeport服务
+### 2. Nodeport服务
 
 通过NodePort发布的方式基于通过ClusterIP发布的方式，先生成一个ClusterIP，然后将这个虚拟IP地址及端口映射到各个集群机器（即Master和Node）的指定端口上，这样，Kubernetes集群外部的机器就可以通过“NodeIP:端口”方式访问Service。之前已经提到过，ClusterIP本身已经提供了负载均衡功能，所以在NodePort模式下，不管访问的是集群中的哪台机器，效果都是一模一样的。也就是说，都先由某台机器通过映射关系转发到ClusterIP，然后由ClusterIP通过比例随机算法转发到对应Pod。
 
@@ -206,4 +206,58 @@ spec:
       targetPort: 80
       nodePort: 30001
   type: NodePort
+```
+
+- 测试服务
+```diff
+$ kubectl get service -o wide
+NAME               TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE    SELECTOR
+...
+nodeportservice    NodePort    10.98.126.255    <none>        8080:30001/TCP   103m   example=forservice
+...
+
++ Node的IP是192.168.1.10，NodePort是30001
+
+$ curl 192.168.1.10:30001
+<p>The host is exampleservice-78d6997f86-s245p</p>
+$ curl 192.168.1.10:30001
+<p>The host is exampleservice-78d6997f86-n7wz6</p>
+$ curl 192.168.1.10:30001
+<p>The host is pod_example</p>
+$ curl 192.168.1.10:30001
+<p>The host is pod_example</p>
+$ curl 192.168.1.10:30001
+<p>The host is exampleservice-78d6997f86-s245p</p>
+$ curl 192.168.1.10:30001
+<p>The host is exampleservice-78d6997f86-s245p</p>
+$ curl 192.168.1.10:30001
+<p>The host is exampleservice-78d6997f86-n7wz6</p>
+$ curl 192.168.1.10:30001
+<p>The host is exampleservice-78d6997f86-wsjsl</p>
+$ curl 192.168.1.10:30001
+<p>The host is pod_example</p>
+```
+
+### Headless服务
+无头Service（headless service）是一种特殊的Service类型。通过无头Service发布，不会分配任何ClusterIP地址，也不通过kube-proxy进行反向代理和负载均衡。无头Service是通过DNS提供稳定的网络ID来进行访问的，DNS会将无头Service的后端直接解析为Pod的IP地址列表，通过标签选择器将后端的Pod列表返回给调用的客户端。这种类型的Service只能在集群内的Pod中访问，集群内的机器（即Master和Node）无法直接访问，集群外的机器也无法访问。
+
+因为无头Service不提供负载均衡功能，所以开发人员可以自己控制负载均衡策略，降低与Kubernetes系统的耦合性。无头Service主要供StatefulSet使用。
+
+- 创建Headless服务
+
+***`headless_service.yml`***
+```diff
+kind: Service
+apiVersion: v1
+metadata:
+  name: headlessservice
+spec:
+  selector:
+    example: forservice
+  clusterIP: None
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 80
+  type: ClusterIP
 ```
