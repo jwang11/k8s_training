@@ -21,6 +21,7 @@ Service目前可定义为5个大类。通过spec.type属性可定义ClusterIP、
 
 ### ClusterIP服务
 - 通过deployment创建一组pods，标签example=forservice
+
 *`example_deployment.yml`*
 ```diff
 apiVersion: apps/v1
@@ -48,6 +49,7 @@ spec:
             containerPort: 80
 ```
 - 再单独创建一个Pod，打上标签example=forservice
+
 *`example_pod.yml`*
 ```diff
 apiVersion: v1
@@ -83,6 +85,7 @@ exampleservice-78d6997f86-wsjsl   1/1     Running   0          106m
 ```
 
 - 创建ClusterIP服务，关联到标签为example=forservice的Pods
+
 *`clusterip_service.yml`*
 ```diff
 kind: Service
