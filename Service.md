@@ -419,3 +419,44 @@ $ kubectl apply -f example_endpoint.yml
 $ curl 10.105.180.157:8080
 <p>The host is exampleservice-78d6997f86-hcfrr</p>
 ```
+
+- ExternalIP发布服务
+
+***`externalip_service.yml`***
+```diff
+kind: Service
+apiVersion: v1
+metadata:
+  name: externalipservice
+spec:
+  selector:
+    example: forservice
+  ports:
+    - protocol: TCP
+      port: 8081
+      targetPort: 80
+  externalIPs:
+    - 192.168.1.13
+```
+
+    检查服务，和ClusterIP服务相比，多了一个EXTERNAL-IP字段。
+这个Service其实就是简单的ClusterIP Service，Pod端口为80，而向外映射的端口为8081，这个端口会同时映射到ClusterIP和externalIP。
+我们设置的外部IP地址为192.168.1.13，集群外的机器可以通过这个地址访问集群内的服务。
+```diff
+$ kubectl get svc
+NAME                  TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)          AGE
+clusteripservice      ClusterIP      10.110.244.138   <none>          8080/TCP         21h
+externalipservice     ClusterIP      10.100.171.122   192.168.1.13    8081/TCP         2m45s
+
+- 测试从ExternalIP访问
+$ curl 192.168.1.13:8081
+<p>The host is exampleservice-78d6997f86-hcfrr</p>
+$ curl 192.168.1.13:8081
+<p>The host is exampleservice-78d6997f86-6sf8v</p>
+$ curl 192.168.1.13:8081
+<p>The host is pod_example</p>
+
+```
+
+
+### 6. Ingress
