@@ -1,6 +1,6 @@
 ## K8S Service服务
 
-Kubernetes中定义了一种名为Service的抽象，用于对Pod进行逻辑分组，并定义了网络分组访问策略。(注意，service不管理Pod，它是一种网络服务发现）
+    K8S中定义了一种名为Service的抽象，用于对Pod进行逻辑分组，并定义了网络分组访问策略。(注意，service不管理Pod，它是一种网络服务发现）
 一组Pod能够被Service访问，通常是通过标签选择器（label selector）来确定是哪些Pod的。
 虽然后端Pod的IP可能会发生变化，但前端客户端不需要知道这一点，也不必跟踪后端的变化，通过Service可以自动跟踪这种关联。
 除此之外，还可以使用Ingress来发布服务。Ingress并不是某种服务类型，可以充当集群的入口。
@@ -238,12 +238,12 @@ $ curl 192.168.1.10:30001
 <p>The host is pod_example</p>
 ```
 
-### Headless服务
+### 3. Headless服务
 无头Service（headless service）是一种特殊的Service类型。通过无头Service发布，不会分配任何ClusterIP地址，也不通过kube-proxy进行反向代理和负载均衡。无头Service是通过DNS提供稳定的网络ID来进行访问的，DNS会将无头Service的后端直接解析为Pod的IP地址列表，通过标签选择器将后端的Pod列表返回给调用的客户端。这种类型的Service只能在集群内的Pod中访问，集群内的机器（即Master和Node）无法直接访问，集群外的机器也无法访问。
 
 因为无头Service不提供负载均衡功能，所以开发人员可以自己控制负载均衡策略，降低与Kubernetes系统的耦合性。无头Service主要供StatefulSet使用。
 
-- 3. 创建Headless服务
+- 创建Headless服务
 
 ***`headless_service.yml`***
 ```diff
@@ -261,3 +261,67 @@ spec:
       targetPort: 80
   type: ClusterIP
 ```
+
+查看service
+```diff
+$ kubectl apply -f headless_service.yml
+
+$ kubectl get service -o wide
+NAME               TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE    SELECTOR
+headlessservice    ClusterIP   None             <none>        8080/TCP         15h    example=forservice
+```
+
+由于这个Service无法由集群内外的机器直接访问，因此只能由Pod访问，而且需要通过DNS形式进行访问。具体访问形式为{ServiceName}.{Namespace}.svc.{ClusterDomain}，其中svc是Service的缩写（固定格式）；ClusterDomain表示集群域，本例中默认的集群域为cluster.local；前面两段文字则是根据Service定义决定的，这个例子中ServiceName为exampleheadlessservice，而Namespace没有在yml文件中指定，默认值为Default。
+
+- 创建test pod来测试Headless
+
+***`test_pod.yml`***
+```diff
+apiVersion: v1
+kind: Pod
+metadata:
+  name: testheadlessservice
+spec:
+  containers:
+  - name: testcontainer
+    image: docker.io/appropriate/curl
+    imagePullPolicy: IfNotPresent
+    command: ['sh', '-c']
+    args: ['echo "test pod for headless service!";sleep 3600']
+```
+该Pod是一种工具箱，里面存放了一些测试网络和DNS使用的工具（例如，curl和nslookup等），正好用于测试现在的Service。执行sleep 3600命令，可让该容器长期处于运行状态。
+
+```diff
+- 运行test pod
+$ kubectl apply -ff test_pod.yml
+
+- 进入test pod
+$ kubectl exec -ti testheadlessservice -- /bin/sh
+/ # nslookup headlessservice.default.svc.cluster.local
+Name:      headlessservice.default.svc.cluster.local
+Address 1: 10.244.1.12 10-244-1-12.headlessservice.default.svc.cluster.local
+Address 2: 10.244.1.10 10-244-1-10.clusteripservice.default.svc.cluster.local
+Address 3: 10.244.1.11 10-244-1-11.headlessservice.default.svc.cluster.local
+
+- 访问service域名
+/ # curl headlessservice.default.svc.cluster.local
+<p>The host is exampleservice-78d6997f86-hcfrr</p>
+/ # curl headlessservice.default.svc.cluster.local
+<p>The host is exampleservice-78d6997f86-m9fnl</p>
+/ # curl headlessservice.default.svc.cluster.local
+<p>The host is exampleservice-78d6997f86-m9fnl</p>
+/ # curl headlessservice.default.svc.cluster.local
+<p>The host is exampleservice-78d6997f86-hcfrr</p>
+/ # curl headlessservice.default.svc.cluster.local
+<p>The host is exampleservice-78d6997f86-6sf8v</p>
+
+- 访问pod域名
+/ # curl 10-244-1-10.clusteripservice.default.svc.cluster.local
+<p>The host is exampleservice-78d6997f86-6sf8v</p>
+/ # curl 10-244-1-12.headlessservice.default.svc.cluster.local
+<p>The host is exampleservice-78d6997f86-m9fnl</p>
+/ # curl 10-244-1-11.headlessservice.default.svc.cluster.local
+<p>The host is exampleservice-78d6997f86-hcfrr</p>
+```
+除了直接调用该域名访问服务之外，还可以通过解析域名并根据自定义需求来决定具体要访问哪个Pod的ID地址。
+这种方式更适用于由StatefulSet产生的有状态Pod。
