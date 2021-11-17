@@ -460,3 +460,8 @@ $ curl 192.168.1.13:8081
 
 
 ### 6. Ingress
+    要将Kubernetes集群内的服务发布到集群外来使用，通常的办法是配置NodePort或LoadBalancer的Service，或者给Service配置ExternalIP，或者通过Pod模板中的HostPort进行配置等。但这些方式都存在比较严重的问题。它们几乎都是通过节点端口形式向外暴露服务的，Service一旦变多，每个节点上开启的端口也会变多。这样不仅维护起来相当复杂，安全性还会大大降低。Ingress可以避免这个问题，除了Ingress自身的服务需要向外发布之外，其他服务不必使用节点端口形式向外发布。由Ingress接收外部请求，然后按照域名配置转发给各个后端服务。
+   在使用Ingress时一般会涉及3个组件
+- Ingress控制器：实质上是监控器。它不断地与API Server进行交互，实时地感知后端Service、Pod等的变化情况，比如新增和减少Pod、增加与减少Service等。当得到这些变化信息后，Ingress控制器再结合Ingress生成配置，然后更新反向代理负载均衡器并刷新其配置，以达到服务发现的作用。
+- 反向代理负载均衡器：其实它类似于Nginx、Apache的应用。在集群中可以使用Deployment、DaemonSet等控制器自由部署反向代理负载均衡器。
+- Ingress：定义访问规则。假如某个域名对应某个Service，或者某个域名下的子路径对应某个Service，那么当某个域名的请求或子路径的请求进来时，就把请求转发给对应Service。根据这个规则，Ingress控制器会将访问规则动态写入负载均衡器配置中，从而实现整体的服务发现和负载均衡。
