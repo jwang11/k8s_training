@@ -327,7 +327,7 @@ Address 3: 10.244.1.11 10-244-1-11.headlessservice.default.svc.cluster.local
 这种方式更适用于由StatefulSet产生的有状态Pod。
 
 
-### ExternalName服务
+### 4. ExternalName服务
     ExternalName是将外部服务引入进来，通过一定格式映射到Kubernetes集群，从而为集群内部提供服务。也就是说，ExternalName类型的Service没有选择器，也没有定义任何的端口和端点。相反，对于运行在集群外部的服务，通过返回外部服务别名这种方式来提供服务。
 
 - 创建ExternalName服务
@@ -368,5 +368,54 @@ body{color:#333;background:#fff;padding:6px 0 0;margin:0;position:relative;min-w
 th,td,.p1,.p2{font-family:arial}p,form,ol,ul,li,dl,dt,dd,h3{margin:0;padding:0;list-style:none}i
 nput{padding-top:0;padding-bottom:0;-moz-box-sizing:border-box;-webkit-box-sizing:border-box;box
 -sizing:border-box}table,img{border:0}td{font-size:9pt;line-height:18px}
+```
 
+### 5. 其它Service配置方式
+
+- Service + Endpoint灵活关联
+
+***`noselector_service.yml`***
+```
+kind: Service
+apiVersion: v1
+metadata:
+  name: noselectorservice
+spec:
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 80
+```
+
+检查服务
+```diff
+$ kubectl apply -f noselector_service.yml
+$ kubectl get service
+NAME                  TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)          AGE
+noselectorservice     ClusterIP      10.105.180.157   <none>          8080/TCP         8s
+```
+
+配置Endpoints
+
+***`example_endpoint.yml`***
+```diff
+kind: Endpoints
+apiVersion: v1
+metadata:
++ 注意，这里endpoint name和service name保持一致，就能够被关联到
+  name: noselectorservice
+subsets:
+  - addresses:
+      - ip: 10.244.1.11
+    ports:
+      - port: 80
+```
+
+测试
+```diff
+$ kubectl apply -f example_endpoint.yml
+
+- 访问clusterIP，就关联到endpoint里的IP
+$ curl 10.105.180.157:8080
+<p>The host is exampleservice-78d6997f86-hcfrr</p>
 ```
