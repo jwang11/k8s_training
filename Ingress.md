@@ -132,7 +132,8 @@ cert-manager-webhook   ClusterIP      10.97.26.23     <none>        443/TCP     
 kubernetes             ClusterIP      10.96.0.1       <none>        443/TCP                      4d6h
 traefik                LoadBalancer   10.108.184.3    <pending>     80:30690/TCP,443:32714/TCP   23h
 
-+ traefik dashboard可以通过nodeip:30690（http）/32714(https)，或者clusterIP 10.108.184.3:80来访问
-
++ traefik dashboard可以通过clusterIP 10.108.184.3来访问
 $ curl -H Host:traefik.mylab.com http://10.108.184.3/dashboard/
++ 或者nodeip:30690（http）/32714(https)
+$ curl -H Host:traefik.mylab.com http://192.168.1.13:30690/dashboard/ 
 ```
