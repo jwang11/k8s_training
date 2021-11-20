@@ -120,3 +120,19 @@ spec:
   tls:
     secretName: mylab-com-cert-secret
 ```
+`$ kubectl apply -f ingress_route.yml`
+
+- 测试dashboard
+
+```diff
+$ kubectl get svc
+NAME                   TYPE           CLUSTER-IP      EXTERNAL-IP   PORT(S)                      AGE
+cert-manager           ClusterIP      10.101.255.31   <none>        9402/TCP                     153m
+cert-manager-webhook   ClusterIP      10.97.26.23     <none>        443/TCP                      153m
+kubernetes             ClusterIP      10.96.0.1       <none>        443/TCP                      4d6h
+traefik                LoadBalancer   10.108.184.3    <pending>     80:30690/TCP,443:32714/TCP   23h
+
++ traefik dashboard可以通过nodeip:30690（http）/32714(https)，或者clusterIP 10.108.184.3:80来访问
+
+$ curl -H Host:traefik.mylab.com http://10.108.184.3/dashboard/
+```
