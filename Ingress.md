@@ -62,3 +62,61 @@ spec:
     kind: ClusterIssuer
     group: cert-manager.io
 ```
+
+- 生成dashboard的Authentication
+
+```diff
+$ bash <<'EOF'
+   
+# Change these credentials to your own
+export TRAEFIK_UI_USER=admin
+export TRAEFIK_UI_PASS=dashboard
+export DESTINATION_FOLDER=${HOME}/temp/traefik-ui-creds
+   
+# Backup credentials to local files (in case you'll forget them later on)
+mkdir -p ${DESTINATION_FOLDER}
+echo $TRAEFIK_UI_USER >> ${DESTINATION_FOLDER}/traefik-ui-user.txt
+echo $TRAEFIK_UI_PASS >> ${DESTINATION_FOLDER}/traefik-ui-pass.txt
+   
+htpasswd -Bbn ${TRAEFIK_UI_USER} ${TRAEFIK_UI_PASS} \
+    > ${DESTINATION_FOLDER}/htpasswd
+   
+unset TRAEFIK_UI_USER TRAEFIK_UI_PASS DESTINATION_FOLDER
+   
+EOF
+
+$ kubectl create secret generic traefik-dashboard-auth-secret \
+   --from-file=$HOME/temp/traefik-ui-creds/htpasswd \
+   --namespace traefik
+```
+
+- Dashboard
+
+*`ingress_route.yml`*
+```diff
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: traefik-dashboard-auth
+spec:
+  basicAuth:
+    secret: traefik-dashboard-auth-secret
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-dashboard
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`traefik.mylab.com`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))
+      services:
+        - name: api@internal
+          kind: TraefikService
+      middlewares:
+        - name: traefik-dashboard-auth # Referencing the BasicAuth middleware
+  tls:
+    secretName: mylab-com-cert-secret
+```
