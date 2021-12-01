@@ -39,10 +39,11 @@ $ sysctl --system
 - 设置系统时区为 中国/上海 
 $ timedatectl set-timezone Asia/Shanghai 
 - 将当前的 UTC 时间写入硬件时钟 
-$ timedatectl set-local-rtc 0 
+$ timedatectl set-local-rtc 0
+
 - 重启依赖于系统时间的服务
 $ systemctl restart rsyslog
-$ systemctl restart crond
+$ systemctl restart cron
 
 - 安装并启动containerd
 $ apt install containerd apt-transport-https
