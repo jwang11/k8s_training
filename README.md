@@ -7,6 +7,8 @@ training of k8s
 > worker:192.168.1.10
 
 ### 1. 集群节点环境准备
+> 针对所有节点，包括master和worker
+
 ```diff
 - 切换到root
 $ sudo su
@@ -33,6 +35,14 @@ net.bridge.bridge-nf-call-iptables  = 1
 net.ipv4.ip_forward                 = 1
 EOF
 $ sysctl --system
+
+- 设置系统时区为 中国/上海 
+$ timedatectl set-timezone Asia/Shanghai 
+- 将当前的 UTC 时间写入硬件时钟 
+$ timedatectl set-local-rtc 0 
+- 重启依赖于系统时间的服务
+$ systemctl restart rsyslog
+$ systemctl restart crond
 
 - 安装并启动containerd
 $ apt install containerd apt-transport-https
