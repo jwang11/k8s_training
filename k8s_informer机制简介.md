@@ -42,45 +42,22 @@ func NewSharedInformer(lw ListerWatcher, exampleObject runtime.Object, defaultEv
 func NewSharedIndexInformer(lw ListerWatcher, exampleObject runtime.Object, defaultEventHandlerResyncPeriod time.Duration, indexers Indexers) SharedIndexInformer {
 	realClock := &clock.RealClock{}
 	sharedIndexInformer := &sharedIndexInformer{
-+   // 管理所有处理器。处理器在深入理解章节再介绍
++               // 管理所有处理器。处理器在深入理解章节再介绍
 		processor:                       &sharedProcessor{clock: realClock},
-+   // 其实就是在构造cache，读者可以自行查看NewIndexer()的实现，
-+   // 在cache中的对象用DeletionHandlingMetaNamespaceKeyFunc计算对象键，用indexers计算索引键
-+   // 可以想象成每个对象键是Namespace/Name，每个索引键是Namespace，即按照Namesapce分类
-+   // 因为objType决定了只有一种类型对象，所以Namesapce是最大的分类
++               // 其实就是在构造cache，读者可以自行查看NewIndexer()的实现，
++               // 在cache中的对象用DeletionHandlingMetaNamespaceKeyFunc计算对象键，用indexers计算索引键
++               // 可以想象成每个对象键是Namespace/Name，每个索引键是Namespace，即按照Namesapce分类
++               // 因为objType决定了只有一种类型对象，所以Namesapce是最大的分类
 		indexer:                         NewIndexer(DeletionHandlingMetaNamespaceKeyFunc, indexers),
-+   // 下面这两主要就是给Controller用，确切的说是给Reflector用的
++               // 下面这两主要就是给Controller用，确切的说是给Reflector用的
 		listerWatcher:                   lw,
 		objectType:                      exampleObject,
-+   // 无论是否需要定时同步，SharedInformer都提供了一个默认的同步时间，当然这个是外部设置的    
++               // 无论是否需要定时同步，SharedInformer都提供了一个默认的同步时间，当然这个是外部设置的    
 		resyncCheckPeriod:               defaultEventHandlerResyncPeriod,
 		defaultEventHandlerResyncPeriod: defaultEventHandlerResyncPeriod,
 		cacheMutationDetector:           NewCacheMutationDetector(fmt.Sprintf("%T", exampleObject)),
 		clock:                           realClock,
 	}
 	return sharedIndexInformer
-}
-
-func NewSharedIndexInformer(lw ListerWatcher, objType runtime.Object, defaultEventHandlerResyncPeriod time.Duration, indexers Indexers) SharedIndexInformer {
-    realClock := &clock.RealClock{}
-    sharedIndexInformer := &sharedIndexInformer{
-        // 管理所有处理器
-        processor:                       &sharedProcessor{clock: realClock},
-        // 其实就是在构造cache，读者可以自行查看NewIndexer()的实现，
-        // 在cache中的对象用DeletionHandlingMetaNamespaceKeyFunc计算对象键，用indexers计算索引键
-        // 可以想象成每个对象键是Namespace/Name，每个索引键是Namespace，即按照Namesapce分类
-        // 因为objType决定了只有一种类型对象，所以Namesapce是最大的分类
-        indexer:                         NewIndexer(DeletionHandlingMetaNamespaceKeyFunc, indexers),
-        // 下面这两主要就是给Controller用，确切的说是给Reflector用的
-        listerWatcher:                   lw,
-        objectType:                      objType,
-        // 无论是否需要定时同步，SharedInformer都提供了一个默认的同步时间，当然这个是外部设置的
-        resyncCheckPeriod:               defaultEventHandlerResyncPeriod,
-        defaultEventHandlerResyncPeriod: defaultEventHandlerResyncPeriod,
-        // 默认没有开启的对象突变检测器，没啥用，也不多介绍
-        cacheMutationDetector:           NewCacheMutationDetector(fmt.Sprintf("%T", objType)),
-        clock: realClock,
-    }
-    return sharedIndexInformer
 }
 ```
