@@ -11,7 +11,7 @@
 ## Informer机制分析
 ![Informer代码流程图](informer机制流程图.png)
 
-在k8s里，SharedInformer是Informer机制的核心，controller, reflector都包含在其中，控制着资源的监控和业务逻辑的执行。
+在k8s里，SharedInformer是Informer机制的核心，内置controller, 而reflector就包含在controller里。sharedIndexInformer.Run->controller.Run->控制着资源的监控和业务逻辑的执行。
 ### SharedInformer
 - client-go实现了两个创建SharedInformer的接口（码源自client-go/tools/cache/shared_informer.go）
 ```diff
@@ -301,10 +301,7 @@ type Config struct {
 	// WatchListPageSize is the requested chunk size of initial and relist watch lists.
 	WatchListPageSize int64
 }
-```
 
-controller定义
-```diff
 // `*controller` implements Controller
 type controller struct {
 	config         Config
@@ -344,6 +341,7 @@ func (c *controller) Run(stopCh <-chan struct{}) {
 		<-stopCh
 		c.config.Queue.Close()
 	}()
++	// 创建reflector	
 	r := NewReflector(
 		c.config.ListerWatcher,
 		c.config.ObjectType,
@@ -363,23 +361,87 @@ func (c *controller) Run(stopCh <-chan struct{}) {
 
 	var wg wait.Group
 
++	// 启动reflector监控目标资源
 	wg.StartWithChannel(stopCh, r.Run)
-
++	// 这是最重要的处理逻辑 - c.processLoop
 	wait.Until(c.processLoop, time.Second, stopCh)
 	wg.Wait()
 }
-
-// Returns true once this controller has completed an initial resource listing
-func (c *controller) HasSynced() bool {
-	return c.config.Queue.HasSynced()
-}
-
-func (c *controller) LastSyncResourceVersion() string {
-	c.reflectorMutex.RLock()
-	defer c.reflectorMutex.RUnlock()
-	if c.reflector == nil {
-		return ""
+```
+- controller.processLoop
+```diff
+// processLoop drains the work queue.
+// TODO: Consider doing the processing in parallel. This will require a little thought
+// to make sure that we don't end up processing the same object multiple times
+// concurrently.
+//
+// TODO: Plumb through the stopCh here (and down to the queue) so that this can
+// actually exit when the controller is stopped. Or just give up on this stuff
+// ever being stoppable. Converting this whole package to use Context would
+// also be helpful.
+func (c *controller) processLoop() {
+	for {
++		// c.config.Process这里就是sharedIndexInformer.HandleDeltas()，负责处理DeltaFifo里Pop出来的每个Delta	
+		obj, err := c.config.Queue.Pop(PopProcessFunc(c.config.Process))
+		if err != nil {
+			if err == ErrFIFOClosed {
+				return
+			}
+			if c.config.RetryOnError {
+				// This is the safe way to re-enqueue.
+				c.config.Queue.AddIfNotPresent(obj)
+			}
+		}
 	}
-	return c.reflector.LastSyncResourceVersion()
+}
+```
+
+- HandleDeltas
+```diff
+func (s *sharedIndexInformer) HandleDeltas(obj interface{}) error {
+	s.blockDeltas.Lock()
+	defer s.blockDeltas.Unlock()
+
+	// from oldest to newest
+	for _, d := range obj.(Deltas) {
+		switch d.Type {
+		case Sync, Replaced, Added, Updated:
+			s.cacheMutationDetector.AddObject(d.Object)
+			if old, exists, err := s.indexer.Get(d.Object); err == nil && exists {
+				if err := s.indexer.Update(d.Object); err != nil {
+					return err
+				}
+
+				isSync := false
+				switch {
+				case d.Type == Sync:
+					// Sync events are only propagated to listeners that requested resync
+					isSync = true
+				case d.Type == Replaced:
+					if accessor, err := meta.Accessor(d.Object); err == nil {
+						if oldAccessor, err := meta.Accessor(old); err == nil {
+							// Replaced events that didn't change resourceVersion are treated as resync events
+							// and only propagated to listeners that requested resync
+							isSync = accessor.GetResourceVersion() == oldAccessor.GetResourceVersion()
+						}
+					}
+				}
++				// 发布updateNotification				
+				s.processor.distribute(updateNotification{oldObj: old, newObj: d.Object}, isSync)
+			} else {
+				if err := s.indexer.Add(d.Object); err != nil {
+					return err
+				}
+				s.processor.distribute(addNotification{newObj: d.Object}, false)
+			}
+		case Deleted:
+			if err := s.indexer.Delete(d.Object); err != nil {
+				return err
+			}
++			// 发布deleteNotification			
+			s.processor.distribute(deleteNotification{oldObj: d.Object}, false)
+		}
+	}
+	return nil
 }
 ```
