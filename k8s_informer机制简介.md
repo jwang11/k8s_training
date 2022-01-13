@@ -615,16 +615,17 @@ func (p *sharedProcessor) distribute(obj interface{}, sync bool) {
 }
 ```
 
-## Informer工程 - sharedInformerFactory
+## Informer工厂 - sharedInformerFactory
 
 每个SharedInformer其实只负责一种对象，在构造SharedInformer的时候指定了对象类型。SharedInformerFactory可以构造Kubernetes里所有对象的Informer，而且主要用在controller-manager这个服务中。因为controller-manager负责管理绝大部分controller，每类controller不仅需要自己关注的对象的informer，同时也可能需要其他对象的Informer(比如ReplicationController也需要PodInformer,否则他无法感知Pod的启动和关闭，也就达不到监控的目的了)，所以一个SharedInformerFactory可以让所有的controller共享使用同一个类对象的Informer。
 
 
-- sharedInformerFactory
+- sharedInformerFactory类型
 
 代码源自client-go/informers/factory.go
 ```diff
 type sharedInformerFactory struct {
++	// apiserver的客户端，列举和监听资源就可以了
 	client           kubernetes.Interface
 	namespace        string
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
@@ -632,9 +633,52 @@ type sharedInformerFactory struct {
 	defaultResync    time.Duration
 	customResync     map[reflect.Type]time.Duration
 
++	// 每类对象一个Informer，但凡使用SharedInformerFactory构建的Informer同一个类型其实都是同一个Informer
 	informers map[reflect.Type]cache.SharedIndexInformer
 	// startedInformers is used for tracking which informers have been started.
 	// This allows Start() to be called multiple times safely.
 	startedInformers map[reflect.Type]bool
+}
+```
+- InformerFor构造指定对象类型的Informer
+```diff
+// InternalInformerFor returns the SharedIndexInformer for obj using an internal
+// client.
+func (f *sharedInformerFactory) InformerFor(obj runtime.Object, newFunc internalinterfaces.NewInformerFunc) cache.SharedIndexInformer {
+	f.lock.Lock()
+	defer f.lock.Unlock()
++	// 通过反射获取obj的类型
+	informerType := reflect.TypeOf(obj)
++	// 如果Informer已经创建，那么就复用这个Informer	
+	informer, exists := f.informers[informerType]
+	if exists {
+		return informer
+	}
+
+	resyncPeriod, exists := f.customResync[informerType]
+	if !exists {
+		resyncPeriod = f.defaultResync
+	}
++	// 调用使用者提供构造函数，然后把创建的Informer保存起来
+	informer = newFunc(f.client, resyncPeriod)
+	f.informers[informerType] = informer
+
+	return informer
+}
+```
+
+- 在sharedInformerFactory把对象创建出来后，运行Start()接口执行informer.Run
+```diff
+// Start initializes all requested informers.
+func (f *sharedInformerFactory) Start(stopCh <-chan struct{}) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	for informerType, informer := range f.informers {
+		if !f.startedInformers[informerType] {
+			go informer.Run(stopCh)
+			f.startedInformers[informerType] = true
+		}
+	}
 }
 ```
