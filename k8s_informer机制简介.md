@@ -39,7 +39,6 @@ func NewSharedInformer(lw ListerWatcher, exampleObject runtime.Object, defaultEv
 func NewSharedIndexInformer(lw ListerWatcher, exampleObject runtime.Object, defaultEventHandlerResyncPeriod time.Duration, indexers Indexers) SharedIndexInformer {
 	realClock := &clock.RealClock{}
 	sharedIndexInformer := &sharedIndexInformer{
-+               // 管理所有处理器。处理器在深入理解章节再介绍
 		processor:                       &sharedProcessor{clock: realClock},
 +               // 其实就是在构造cache，读者可以自行查看NewIndexer()的实现，
 +               // 在cache中的对象用DeletionHandlingMetaNamespaceKeyFunc计算对象键，用indexers计算索引键
@@ -74,7 +73,7 @@ func NewSharedIndexInformer(lw ListerWatcher, exampleObject runtime.Object, defa
 type sharedIndexInformer struct {
 	indexer    Indexer
 	controller Controller
-
++	// sharedIndexInformer把ResourceEventHandler进行了封装，并统一由sharedProcessor管理，
 	processor             *sharedProcessor
 	cacheMutationDetector MutationDetector
 
@@ -228,6 +227,7 @@ func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
 	var wg wait.Group
 	defer wg.Wait()              // Wait for Processor to stop
 	defer close(processorStopCh) // Tell Processor to stop
++	// 创建两个协程运行sharedProcessor和cacheMutationDetector的核心函数
 	wg.StartWithChannel(processorStopCh, s.cacheMutationDetector.Run)
 	wg.StartWithChannel(processorStopCh, s.processor.run)
 
@@ -236,6 +236,7 @@ func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
 		defer s.startedLock.Unlock()
 		s.stopped = true // Don't want any new listeners
 	}()
++	// 主执行逻辑	
 	s.controller.Run(stopCh)
 }
 
@@ -363,7 +364,7 @@ func (c *controller) Run(stopCh <-chan struct{}) {
 
 +	// 启动reflector监控目标资源
 	wg.StartWithChannel(stopCh, r.Run)
-+	// 这是最重要的处理逻辑 - c.processLoop
++	// 核心处理逻辑在c.processLoop
 	wait.Until(c.processLoop, time.Second, stopCh)
 	wg.Wait()
 }
@@ -407,6 +408,7 @@ func (s *sharedIndexInformer) HandleDeltas(obj interface{}) error {
 		switch d.Type {
 		case Sync, Replaced, Added, Updated:
 			s.cacheMutationDetector.AddObject(d.Object)
++			// 如果cache中有的对象，一律看做是更新事件			
 			if old, exists, err := s.indexer.Get(d.Object); err == nil && exists {
 				if err := s.indexer.Update(d.Object); err != nil {
 					return err
@@ -426,22 +428,188 @@ func (s *sharedIndexInformer) HandleDeltas(obj interface{}) error {
 						}
 					}
 				}
-+				// 发布updateNotification				
++				// 通知updateNotification给processor			
 				s.processor.distribute(updateNotification{oldObj: old, newObj: d.Object}, isSync)
 			} else {
++				// cache中没有的对象，一律看做是新增事件			
 				if err := s.indexer.Add(d.Object); err != nil {
 					return err
 				}
++				// 通知addNotification给processor				
 				s.processor.distribute(addNotification{newObj: d.Object}, false)
 			}
 		case Deleted:
 			if err := s.indexer.Delete(d.Object); err != nil {
 				return err
 			}
-+			// 发布deleteNotification			
++			// 通知deleteNotification给processor			
 			s.processor.distribute(deleteNotification{oldObj: d.Object}, false)
 		}
 	}
 	return nil
 }
+```
+
+## sharedProcessor
+sharedProcessor管理processorListener监听器
+```diff
+// sharedProcessor has a collection of processorListener and can
+// distribute a notification object to its listeners.  There are two
+// kinds of distribute operations.  The sync distributions go to a
+// subset of the listeners that (a) is recomputed in the occasional
+// calls to shouldResync and (b) every listener is initially put in.
+// The non-sync distributions go to every listener.
+type sharedProcessor struct {
+	listenersStarted bool
+	listenersLock    sync.RWMutex
++	// 通用的listener	
+	listeners        []*processorListener
++	// 需要定时同步的listener
+	syncingListeners []*processorListener
+	clock            clock.Clock
+	wg               wait.Group
+}
+```
+
+- add listener
+```diff
+func (p *sharedProcessor) addListener(listener *processorListener) {
+	p.listenersLock.Lock()
+	defer p.listenersLock.Unlock()
+
+	p.addListenerLocked(listener)
+	if p.listenersStarted {
+		p.wg.Start(listener.run)
+		p.wg.Start(listener.pop)
+	}
+}
+
+// processorListener relays notifications from a sharedProcessor to
+// one ResourceEventHandler --- using two goroutines, two unbuffered
+// channels, and an unbounded ring buffer.  The `add(notification)`
+// function sends the given notification to `addCh`.  One goroutine
+// runs `pop()`, which pumps notifications from `addCh` to `nextCh`
+// using storage in the ring buffer while `nextCh` is not keeping up.
+// Another goroutine runs `run()`, which receives notifications from
+// `nextCh` and synchronously invokes the appropriate handler method.
+//
+// processorListener also keeps track of the adjusted requested resync
+// period of the listener.
+type processorListener struct {
+	nextCh chan interface{}
+	addCh  chan interface{}
+
+	handler ResourceEventHandler
+
+	// pendingNotifications is an unbounded ring buffer that holds all notifications not yet distributed.
+	// There is one per listener, but a failing/stalled listener will have infinite pendingNotifications
+	// added until we OOM.
+	// TODO: This is no worse than before, since reflectors were backed by unbounded DeltaFIFOs, but
+	// we should try to do something better.
+	pendingNotifications buffer.RingGrowing
+
+	// requestedResyncPeriod is how frequently the listener wants a
+	// full resync from the shared informer, but modified by two
+	// adjustments.  One is imposing a lower bound,
+	// `minimumResyncPeriod`.  The other is another lower bound, the
+	// sharedIndexInformer's `resyncCheckPeriod`, that is imposed (a) only
+	// in AddEventHandlerWithResyncPeriod invocations made after the
+	// sharedIndexInformer starts and (b) only if the informer does
+	// resyncs at all.
+	requestedResyncPeriod time.Duration
+	// resyncPeriod is the threshold that will be used in the logic
+	// for this listener.  This value differs from
+	// requestedResyncPeriod only when the sharedIndexInformer does
+	// not do resyncs, in which case the value here is zero.  The
+	// actual time between resyncs depends on when the
+	// sharedProcessor's `shouldResync` function is invoked and when
+	// the sharedIndexInformer processes `Sync` type Delta objects.
+	resyncPeriod time.Duration
+	// nextResync is the earliest time the listener should get a full resync
+	nextResync time.Time
+	// resyncLock guards access to resyncPeriod and nextResync
+	resyncLock sync.Mutex
+}
+```
+
+- listener.run和pop
+```diff
+func (p *processorListener) run() {
+	// this call blocks until the channel is closed.  When a panic happens during the notification
+	// we will catch it, **the offending item will be skipped!**, and after a short delay (one second)
+	// the next notification will be attempted.  This is usually better than the alternative of never
+	// delivering again.
+	stopCh := make(chan struct{})
+	wait.Until(func() {
+		for next := range p.nextCh {
+			switch notification := next.(type) {
+			case updateNotification:
+				p.handler.OnUpdate(notification.oldObj, notification.newObj)
+			case addNotification:
+				p.handler.OnAdd(notification.newObj)
+			case deleteNotification:
+				p.handler.OnDelete(notification.oldObj)
+			default:
+				utilruntime.HandleError(fmt.Errorf("unrecognized notification: %T", next))
+			}
+		}
+		// the only way to get here is if the p.nextCh is empty and closed
+		close(stopCh)
+	}, 1*time.Second, stopCh)
+}
+
+func (p *processorListener) pop() {
+	defer utilruntime.HandleCrash()
+	defer close(p.nextCh) // Tell .run() to stop
++	// 初始化nextCh
+	var nextCh chan<- interface{}
+	var notification interface{}
+	for {
+		select {
++		// nextCh还没有初始化(nil)，这个语句就会被阻塞		
+		case nextCh <- notification:
+			// Notification dispatched
+			var ok bool
+			notification, ok = p.pendingNotifications.ReadOne()
+			if !ok { // Nothing to pop
+				nextCh = nil // Disable this select case
+			}
+		case notificationToAdd, ok := <-p.addCh:
+			if !ok {
+				return
+			}
+			if notification == nil { // No notification to pop (and pendingNotifications is empty)
+				// Optimize the case - skip adding to pendingNotifications
+				notification = notificationToAdd
++				// 刚刚获取的事件通过p.nextCh发送给processor				
+				nextCh = p.nextCh
+			} else { // There is already a notification waiting to be dispatched
+				p.pendingNotifications.WriteOne(notificationToAdd)
+			}
+		}
+	}
+}
+```
+
+- sharedProcessor.distribute
+```diff
+func (p *processorListener) add(notification interface{}) {
+	p.addCh <- notification
+}
+
+func (p *sharedProcessor) distribute(obj interface{}, sync bool) {
+	p.listenersLock.RLock()
+	defer p.listenersLock.RUnlock()
+
+	if sync {
+		for _, listener := range p.syncingListeners {
+			listener.add(obj)
+		}
+	} else {
+		for _, listener := range p.listeners {
+			listener.add(obj)
+		}
+	}
+}
+
 ```
