@@ -8,5 +8,79 @@
 - ```Indexer```：用来存储资源对象并自带索引功能的本地存储，提供 object 对象的索引，是线程安全的，缓存对象信息。
 - ```workqueue```: 最后轮到Controller从线程安全的Workqueue中取出这个资源的key，进行事件的处理。Controller在处理事件的过程中可能是并行的，有许多个Worker线程不断从Workqueue中取事件并处理。 worker 来业务逻辑通常是计算目前集群的状态和用户希望达到的状态有多大的区别，然后不断的调和处理。Informer/SharedInformer与Worker线程的关系，实际上是一个生产者-消费者关系，利用一个Workqueue将二者分开，既实现了两个部件的解耦，也解决了双方处理速度不一致的问题。
 
-## 代码流程图
+## Informer机制分析
 ![Informer代码流程图](informer机制流程图.png)
+
+在k8s里，SharedInformer是Informer机制的核心，controller, reflector都包含在其中，控制着资源的监控和业务逻辑的执行。
+### SharedInformer
+client-go实现了两个创建SharedInformer的接口
+```diff
+// 代码源自client-go/tools/cache/shared_informer.go
+// lw:这个是apiserver客户端相关的，用于Reflector从apiserver获取资源，所以需要外部提供
+// exampleObject:这个SharedInformer监控的对象类型
+// resyncPeriod:同步周期，SharedInformer需要多长时间给使用者发送一次全量对象的同步时间
+// NewSharedInformer creates a new instance for the listwatcher.
+func NewSharedInformer(lw ListerWatcher, exampleObject runtime.Object, defaultEventHandlerResyncPeriod time.Duration) SharedInformer {
+	return NewSharedIndexInformer(lw, exampleObject, defaultEventHandlerResyncPeriod, Indexers{})
+}
+
+// 创建SharedIndexInformer对象
+// indexers:需要外部提供计算对象索引键的函数，也就是这里面的对象需要通过什么方式创建索引
+
+// NewSharedIndexInformer creates a new instance for the listwatcher.
+// The created informer will not do resyncs if the given
+// defaultEventHandlerResyncPeriod is zero.  Otherwise: for each
+// handler that with a non-zero requested resync period, whether added
+// before or after the informer starts, the nominal resync period is
+// the requested resync period rounded up to a multiple of the
+// informer's resync checking period.  Such an informer's resync
+// checking period is established when the informer starts running,
+// and is the maximum of (a) the minimum of the resync periods
+// requested before the informer starts and the
+// defaultEventHandlerResyncPeriod given here and (b) the constant
+// `minimumResyncPeriod` defined in this file.
+func NewSharedIndexInformer(lw ListerWatcher, exampleObject runtime.Object, defaultEventHandlerResyncPeriod time.Duration, indexers Indexers) SharedIndexInformer {
+	realClock := &clock.RealClock{}
+	sharedIndexInformer := &sharedIndexInformer{
++   // 管理所有处理器。处理器在深入理解章节再介绍
+		processor:                       &sharedProcessor{clock: realClock},
++   // 其实就是在构造cache，读者可以自行查看NewIndexer()的实现，
++   // 在cache中的对象用DeletionHandlingMetaNamespaceKeyFunc计算对象键，用indexers计算索引键
++   // 可以想象成每个对象键是Namespace/Name，每个索引键是Namespace，即按照Namesapce分类
++   // 因为objType决定了只有一种类型对象，所以Namesapce是最大的分类
+		indexer:                         NewIndexer(DeletionHandlingMetaNamespaceKeyFunc, indexers),
++   // 下面这两主要就是给Controller用，确切的说是给Reflector用的
+		listerWatcher:                   lw,
+		objectType:                      exampleObject,
++   // 无论是否需要定时同步，SharedInformer都提供了一个默认的同步时间，当然这个是外部设置的    
+		resyncCheckPeriod:               defaultEventHandlerResyncPeriod,
+		defaultEventHandlerResyncPeriod: defaultEventHandlerResyncPeriod,
+		cacheMutationDetector:           NewCacheMutationDetector(fmt.Sprintf("%T", exampleObject)),
+		clock:                           realClock,
+	}
+	return sharedIndexInformer
+}
+
+func NewSharedIndexInformer(lw ListerWatcher, objType runtime.Object, defaultEventHandlerResyncPeriod time.Duration, indexers Indexers) SharedIndexInformer {
+    realClock := &clock.RealClock{}
+    sharedIndexInformer := &sharedIndexInformer{
+        // 管理所有处理器
+        processor:                       &sharedProcessor{clock: realClock},
+        // 其实就是在构造cache，读者可以自行查看NewIndexer()的实现，
+        // 在cache中的对象用DeletionHandlingMetaNamespaceKeyFunc计算对象键，用indexers计算索引键
+        // 可以想象成每个对象键是Namespace/Name，每个索引键是Namespace，即按照Namesapce分类
+        // 因为objType决定了只有一种类型对象，所以Namesapce是最大的分类
+        indexer:                         NewIndexer(DeletionHandlingMetaNamespaceKeyFunc, indexers),
+        // 下面这两主要就是给Controller用，确切的说是给Reflector用的
+        listerWatcher:                   lw,
+        objectType:                      objType,
+        // 无论是否需要定时同步，SharedInformer都提供了一个默认的同步时间，当然这个是外部设置的
+        resyncCheckPeriod:               defaultEventHandlerResyncPeriod,
+        defaultEventHandlerResyncPeriod: defaultEventHandlerResyncPeriod,
+        // 默认没有开启的对象突变检测器，没啥用，也不多介绍
+        cacheMutationDetector:           NewCacheMutationDetector(fmt.Sprintf("%T", objType)),
+        clock: realClock,
+    }
+    return sharedIndexInformer
+}
+```
