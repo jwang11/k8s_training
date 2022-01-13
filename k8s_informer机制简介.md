@@ -13,19 +13,15 @@
 
 在k8s里，SharedInformer是Informer机制的核心，controller, reflector都包含在其中，控制着资源的监控和业务逻辑的执行。
 ### SharedInformer
-client-go实现了两个创建SharedInformer的接口
+client-go实现了两个创建SharedInformer的接口（码源自client-go/tools/cache/shared_informer.go）
 ```diff
-// 代码源自client-go/tools/cache/shared_informer.go
-// lw:这个是apiserver客户端相关的，用于Reflector从apiserver获取资源，所以需要外部提供
-// exampleObject:这个SharedInformer监控的对象类型
-// resyncPeriod:同步周期，SharedInformer需要多长时间给使用者发送一次全量对象的同步时间
-// NewSharedInformer creates a new instance for the listwatcher.
++ // lw:这个是apiserver客户端相关的，用于Reflector从apiserver获取资源，所以需要外部提供
++ // exampleObject:这个SharedInformer监控的对象类型
++ // resyncPeriod:同步周期，SharedInformer需要多长时间给使用者发送一次全量对象的同步时间
++ // NewSharedInformer creates a new instance for the listwatcher.
 func NewSharedInformer(lw ListerWatcher, exampleObject runtime.Object, defaultEventHandlerResyncPeriod time.Duration) SharedInformer {
 	return NewSharedIndexInformer(lw, exampleObject, defaultEventHandlerResyncPeriod, Indexers{})
 }
-
-// 创建SharedIndexInformer对象
-// indexers:需要外部提供计算对象索引键的函数，也就是这里面的对象需要通过什么方式创建索引
 
 // NewSharedIndexInformer creates a new instance for the listwatcher.
 // The created informer will not do resyncs if the given
@@ -39,6 +35,7 @@ func NewSharedInformer(lw ListerWatcher, exampleObject runtime.Object, defaultEv
 // requested before the informer starts and the
 // defaultEventHandlerResyncPeriod given here and (b) the constant
 // `minimumResyncPeriod` defined in this file.
++ // indexers:需要外部提供计算对象索引键的函数，也就是这里面的对象需要通过什么方式创建索引
 func NewSharedIndexInformer(lw ListerWatcher, exampleObject runtime.Object, defaultEventHandlerResyncPeriod time.Duration, indexers Indexers) SharedIndexInformer {
 	realClock := &clock.RealClock{}
 	sharedIndexInformer := &sharedIndexInformer{
