@@ -163,6 +163,7 @@ func (s *sharedIndexInformer) AddEventHandlerWithResyncPeriod(handler ResourceEv
 	s.blockDeltas.Lock()
 	defer s.blockDeltas.Unlock()
 
++	// 用listener里的run和pop来处理notification，notifications来自c.config.Process，后面会讲到
 	s.processor.addListener(listener)
 +	// 遍历缓冲中的所有对象，通知处理器，因为SharedInformer已经启动了，可能很多对象已经让其他的处理器处理过了，
 +	// 所以这些对象就不会再通知新添加的处理器，此处就是解决这个问题的
@@ -186,6 +187,7 @@ func newProcessListener(handler ResourceEventHandler, requestedResyncPeriod, res
 	return ret
 }
 ```
+关于processorListener如何处理controller里定义的业务逻辑事件，后面章节再讲
 
 - SharedInformer分发事件给每个处理器
 ```diff
@@ -471,7 +473,7 @@ type sharedProcessor struct {
 }
 ```
 
-- add listener
+- sharedProcessor的addListener
 ```diff
 func (p *sharedProcessor) addListener(listener *processorListener) {
 	p.listenersLock.Lock()
@@ -611,5 +613,28 @@ func (p *sharedProcessor) distribute(obj interface{}, sync bool) {
 		}
 	}
 }
+```
 
+## Informer工程 - sharedInformerFactory
+
+每个SharedInformer其实只负责一种对象，在构造SharedInformer的时候指定了对象类型。SharedInformerFactory可以构造Kubernetes里所有对象的Informer，而且主要用在controller-manager这个服务中。因为controller-manager负责管理绝大部分controller，每类controller不仅需要自己关注的对象的informer，同时也可能需要其他对象的Informer(比如ReplicationController也需要PodInformer,否则他无法感知Pod的启动和关闭，也就达不到监控的目的了)，所以一个SharedInformerFactory可以让所有的controller共享使用同一个类对象的Informer。
+
+
+- sharedInformerFactory
+
+代码源自client-go/informers/factory.go
+```diff
+type sharedInformerFactory struct {
+	client           kubernetes.Interface
+	namespace        string
+	tweakListOptions internalinterfaces.TweakListOptionsFunc
+	lock             sync.Mutex
+	defaultResync    time.Duration
+	customResync     map[reflect.Type]time.Duration
+
+	informers map[reflect.Type]cache.SharedIndexInformer
+	// startedInformers is used for tracking which informers have been started.
+	// This allows Start() to be called multiple times safely.
+	startedInformers map[reflect.Type]bool
+}
 ```
