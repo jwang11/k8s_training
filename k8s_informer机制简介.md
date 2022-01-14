@@ -315,6 +315,7 @@ type controller struct {
 	clock          clock.Clock
 }
 
++ // Controller接口
 // Controller is a low-level controller that is parameterized by a
 // Config and used in sharedIndexInformer.
 type Controller interface {
@@ -366,14 +367,14 @@ func (c *controller) Run(stopCh <-chan struct{}) {
 
 	var wg wait.Group
 
-+	// 启动reflector监控目标资源
++	// 启动reflector监控目标资源，reflector机制会专门分析
 	wg.StartWithChannel(stopCh, r.Run)
-+	// 核心处理逻辑在c.processLoop
++	// 核心处理逻辑在c.processLoop，循环处理DeltaFifo队列里的Object
 	wait.Until(c.processLoop, time.Second, stopCh)
 	wg.Wait()
 }
 ```
-- controller.processLoop
+- 核心处理逻辑controller.processLoop
 ```diff
 // processLoop drains the work queue.
 // TODO: Consider doing the processing in parallel. This will require a little thought
@@ -386,12 +387,10 @@ func (c *controller) Run(stopCh <-chan struct{}) {
 // also be helpful.
 func (c *controller) processLoop() {
 	for {
-+		// c.config.Process这里就是sharedIndexInformer.HandleDeltas()，负责处理DeltaFifo里Pop出来的每个Delta	
++		// c.config.Process这里就是sharedIndexInformer.HandleDeltas()。该函数会传入Pop，负责处理DeltaFifo里pop出来的每个Delta Object
++		// DeltaFifo.Pop具体过程在Reflector里有详述，这里先略过
 		obj, err := c.config.Queue.Pop(PopProcessFunc(c.config.Process))
 		if err != nil {
-			if err == ErrFIFOClosed {
-				return
-			}
 			if c.config.RetryOnError {
 				// This is the safe way to re-enqueue.
 				c.config.Queue.AddIfNotPresent(obj)
@@ -399,9 +398,13 @@ func (c *controller) processLoop() {
 		}
 	}
 }
+
+// PopProcessFunc is passed to Pop() method of Queue interface.
+// It is supposed to process the accumulator popped from the queue.
+type PopProcessFunc func(interface{}) error
 ```
 
-- HandleDeltas
+- 继续上面c.config.Process，也就是sharedIndexInformer.HandleDeltas
 ```diff
 func (s *sharedIndexInformer) HandleDeltas(obj interface{}) error {
 	s.blockDeltas.Lock()
@@ -412,7 +415,7 @@ func (s *sharedIndexInformer) HandleDeltas(obj interface{}) error {
 		switch d.Type {
 		case Sync, Replaced, Added, Updated:
 			s.cacheMutationDetector.AddObject(d.Object)
-+			// 如果cache中有的对象，一律看做是更新事件			
++			// 如果cache中有的对象，一律看做是Update更新事件			
 			if old, exists, err := s.indexer.Get(d.Object); err == nil && exists {
 				if err := s.indexer.Update(d.Object); err != nil {
 					return err
