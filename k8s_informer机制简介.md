@@ -12,7 +12,8 @@
 ![Informer代码流程图](informer机制流程图.png)
 
 在k8s里，SharedInformer是Informer机制的核心，内置controller, 而reflector就包含在controller里。sharedIndexInformer.Run->controller.Run->控制着资源的监控和业务逻辑的执行。
-### SharedInformer
+
+## SharedInformer是整个Informer机制的框架
 - client-go实现了两个创建SharedInformer的接口（码源自client-go/tools/cache/shared_informer.go）
 ```diff
 + // lw:这个是apiserver客户端相关的，用于Reflector从apiserver获取资源，所以需要外部提供
@@ -219,6 +220,7 @@ func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
 		s.startedLock.Lock()
 		defer s.startedLock.Unlock()
 
++		// 创建controller
 		s.controller = New(cfg)
 		s.controller.(*controller).clock = s.clock
 		s.started = true
@@ -229,7 +231,7 @@ func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
 	var wg wait.Group
 	defer wg.Wait()              // Wait for Processor to stop
 	defer close(processorStopCh) // Tell Processor to stop
-+	// 创建两个协程运行sharedProcessor和cacheMutationDetector的核心函数
++	// 创建两个协程运行sharedProcessor和cacheMutationDetector的核心函数，用添加的EventHandler处理业务逻辑
 	wg.StartWithChannel(processorStopCh, s.cacheMutationDetector.Run)
 	wg.StartWithChannel(processorStopCh, s.processor.run)
 
@@ -238,7 +240,7 @@ func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
 		defer s.startedLock.Unlock()
 		s.stopped = true // Don't want any new listeners
 	}()
-+	// 主执行逻辑	
++	// 执行controller里面的Run	
 	s.controller.Run(stopCh)
 }
 
@@ -452,7 +454,7 @@ func (s *sharedIndexInformer) HandleDeltas(obj interface{}) error {
 }
 ```
 
-## sharedProcessor
+## sharedProcessor处理器
 sharedProcessor管理processorListener监听器
 ```diff
 // sharedProcessor has a collection of processorListener and can
