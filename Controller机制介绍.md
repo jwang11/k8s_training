@@ -6,10 +6,6 @@ deployment controller是kube-controller-manager组件中众多控制器中的一
 deployment 是 kubernetes 中用来部署无状态应用的一个对象，也是最常用的一种对象。
 deployment 的本质是控制 replicaSet，replicaSet 会控制 pod，然后由 controller 驱动各个对象达到期望状态。
 
-作者：程序员札记
-链接：https://www.jianshu.com/p/4b9bac3bf076
-来源：简书
-著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
 ## Deployment Controller
 
 代码来自https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/deployment/deployment_controller.go
