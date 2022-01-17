@@ -72,7 +72,7 @@ func NewDeploymentController(dInformer appsinformers.DeploymentInformer, rsInfor
 		// This will enter the sync loop and no-op, because the deployment has been deleted from the store.
 		DeleteFunc: dc.deleteDeployment,
 	})
-+	// replicateset的EventHandler	
++	// replicaset的EventHandler	
 	rsInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    dc.addReplicaSet,
 		UpdateFunc: dc.updateReplicaSet,
