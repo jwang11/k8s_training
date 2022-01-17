@@ -7,7 +7,7 @@ deployment 是 kubernetes 中用来部署无状态应用的一个对象，也是
 deployment 的本质是控制 replicaSet，replicaSet 会控制 pod，然后由 controller 驱动各个对象达到期望状态。
 
 ## Deployment Controller
-
+![Deployment Controller代码流程图](deployment_controller_workflow.png)
 代码来自https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/deployment/deployment_controller.go
 ```diff
 // DeploymentController is responsible for synchronizing Deployment objects stored
