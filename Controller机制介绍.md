@@ -61,17 +61,20 @@ func NewDeploymentController(dInformer appsinformers.DeploymentInformer, rsInfor
 		Recorder:   dc.eventRecorder,
 	}
 
++	// deployment的EventHandler
 	dInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    dc.addDeployment,
 		UpdateFunc: dc.updateDeployment,
 		// This will enter the sync loop and no-op, because the deployment has been deleted from the store.
 		DeleteFunc: dc.deleteDeployment,
 	})
++	// replicateset的EventHandler	
 	rsInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    dc.addReplicaSet,
 		UpdateFunc: dc.updateReplicaSet,
 		DeleteFunc: dc.deleteReplicaSet,
 	})
++	// pod的EventHandler	
 	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		DeleteFunc: dc.deletePod,
 	})
