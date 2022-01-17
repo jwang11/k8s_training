@@ -149,7 +149,7 @@ func (s *sharedIndexInformer) AddEventHandlerWithResyncPeriod(handler ResourceEv
 	}
 
 +	// 创建processor的listener
--	listener := newProcessListener(handler, resyncPeriod, determineResyncPeriod(resyncPeriod, s.resyncCheckPeriod), s.clock.Now(), initialBufferSize)
+	listener := newProcessListener(handler, resyncPeriod, determineResyncPeriod(resyncPeriod, s.resyncCheckPeriod), s.clock.Now(), initialBufferSize)
 
 	if !s.started {
 		s.processor.addListener(listener)
@@ -188,7 +188,7 @@ func newProcessListener(handler ResourceEventHandler, requestedResyncPeriod, res
 	return ret
 }
 ```
-关于processorListener如何处理controller里定义的业务逻辑事件，后面章节再讲
+关于processorListener如何处理controller定义的业务逻辑事件，后面章节再讲
 
 - SharedInformer分发事件给每个处理器
 ```diff
@@ -478,7 +478,7 @@ type sharedProcessor struct {
 }
 ```
 
-- sharedProcessor的addListener
+- sharedProcessor.addListener添加listener
 ```diff
 func (p *sharedProcessor) addListener(listener *processorListener) {
 	p.listenersLock.Lock()
@@ -486,6 +486,7 @@ func (p *sharedProcessor) addListener(listener *processorListener) {
 
 	p.addListenerLocked(listener)
 	if p.listenersStarted {
++		// 执行listener.run和pop	
 		p.wg.Start(listener.run)
 		p.wg.Start(listener.pop)
 	}
@@ -506,6 +507,7 @@ type processorListener struct {
 	nextCh chan interface{}
 	addCh  chan interface{}
 
++	// 通常是处理外部controller定义的业务逻辑，由外部controller传入
 	handler ResourceEventHandler
 
 	// pendingNotifications is an unbounded ring buffer that holds all notifications not yet distributed.
@@ -539,7 +541,7 @@ type processorListener struct {
 }
 ```
 
-- listener.run和pop
+- 执行listener.run和pop
 ```diff
 func (p *processorListener) run() {
 	// this call blocks until the channel is closed.  When a panic happens during the notification
@@ -549,6 +551,7 @@ func (p *processorListener) run() {
 	stopCh := make(chan struct{})
 	wait.Until(func() {
 		for next := range p.nextCh {
++			// 根据notification的类型，调用hander里相应方法		
 			switch notification := next.(type) {
 			case updateNotification:
 				p.handler.OnUpdate(notification.oldObj, notification.newObj)
@@ -598,7 +601,7 @@ func (p *processorListener) pop() {
 }
 ```
 
-- sharedProcessor.distribute
+- sharedProcessor.distribute分发notification消息给listener处理
 ```diff
 func (p *processorListener) add(notification interface{}) {
 	p.addCh <- notification
