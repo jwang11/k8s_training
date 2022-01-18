@@ -117,18 +117,6 @@ func (dc *DeploymentController) updateDeployment(old, cur interface{}) {
 
 func (dc *DeploymentController) deleteDeployment(obj interface{}) {
 	d, ok := obj.(*apps.Deployment)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("couldn't get object from tombstone %#v", obj))
-			return
-		}
-		d, ok = tombstone.Obj.(*apps.Deployment)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("tombstone contained object that is not a Deployment %#v", obj))
-			return
-		}
-	}
 	klog.V(4).InfoS("Deleting deployment", "deployment", klog.KObj(d))
 	dc.enqueueDeployment(d)
 }
@@ -226,9 +214,6 @@ func (dc *DeploymentController) updateReplicaSet(old, cur interface{}) {
 	// If it has a ControllerRef, that's all that matters.
 	if curControllerRef != nil {
 		d := dc.resolveControllerRef(curRS.Namespace, curControllerRef)
-		if d == nil {
-			return
-		}
 		klog.V(4).InfoS("ReplicaSet updated", "replicaSet", klog.KObj(curRS))
 		dc.enqueueDeployment(d)
 		return
@@ -278,9 +263,6 @@ func (dc *DeploymentController) deleteReplicaSet(obj interface{}) {
 		return
 	}
 	d := dc.resolveControllerRef(rs.Namespace, controllerRef)
-	if d == nil {
-		return
-	}
 	klog.V(4).InfoS("ReplicaSet deleted", "replicaSet", klog.KObj(rs))
 	dc.enqueueDeployment(d)
 }
