@@ -162,6 +162,9 @@ func (dc *DeploymentController) processNextWorkItem(ctx context.Context) bool {
 ```
 
 - syncDeployment处理workqueue的item，key作为参数传进来
+
+操作的优先级为：delete > pause > rollback > scale > rollout
+
 ```diff
 // syncDeployment will sync the deployment with the given key.
 // This function is not meant to be invoked concurrently with the same key.
@@ -190,15 +193,16 @@ func (dc *DeploymentController) syncDeployment(ctx context.Context, key string) 
 		return nil
 	}
 
-+	// 对集群中与deployment对象相同命名空间下的所有replicaset对象做处理，若发现匹配但没有关联deployment的replicaset则通过设置ownerReferences字段与deployment关联，
++	// 对集群中与deployment对象相同命名空间下的所有replicaset对象做处理，若发现匹配但没有关联deployment的replicaset则
++	// 通过设置ownerReferences字段与deployment关联，
 +	// 已关联但不匹配的则删除对应的ownerReferences，最后获取返回集群中与Deployment关联匹配的ReplicaSet对象列表；
 	// List ReplicaSets owned by this Deployment, while reconciling ControllerRef
 	// through adoption/orphaning.
 	rsList, err := dc.getReplicaSetsForDeployment(ctx, d)
 
 
-+	// 根据deployment对象的selector，获取当前deployment对象关联的pod，根据deployment所属的replicaset对象的UID对pod进行分类并返回，返回值类型为map[types.UID][]*v1.Pod；
-
++	// 根据deployment对象的selector，获取当前deployment对象关联的pod，根据deployment所属的replicaset对象的UID对pod进行
++	// 分类并返回，返回值类型为map[types.UID][]*v1.Pod；
 	// List all Pods owned by this Deployment, grouped by their ReplicaSet.
 	// Current uses of the podMap are:
 	//
@@ -206,19 +210,21 @@ func (dc *DeploymentController) syncDeployment(ctx context.Context, key string) 
 	// * check that no old Pods are running in the middle of Recreate Deployments.
 	podMap, err := dc.getPodMapForDeployment(d, rsList)
 
++	// 检查是否是删除
 	if d.DeletionTimestamp != nil {
 		return dc.syncStatusOnly(ctx, d, rsList)
 	}
 
++	// 检查deployment是否为pause状态
 	// Update deployment conditions with an Unknown condition when pausing/resuming
 	// a deployment. In this way, we can be sure that we won't timeout when a user
 	// resumes a Deployment with a set progressDeadlineSeconds.
 	dc.checkPausedConditions(ctx, d)
-
 	if d.Spec.Paused {
 		return dc.sync(ctx, d, rsList)
 	}
 
++	// 检查deployment对象的annotations中是否有以下key：deprecated.deployment.rollback.to
 	// rollback is not re-entrant in case the underlying replica sets are updated with a new
 	// revision so we should ensure that we won't proceed to update replica sets until we
 	// make sure that the deployment has cleaned up its rollback spec in subsequent enqueues.
@@ -226,12 +232,14 @@ func (dc *DeploymentController) syncDeployment(ctx context.Context, key string) 
 		return dc.rollback(ctx, d, rsList)
 	}
 
++	// 检查deployment对象是否处于scaling状态
 	scalingEvent, err := dc.isScalingEvent(ctx, d, rsList)
-
 	if scalingEvent {
++		// dc.sync做扩缩容处理	
 		return dc.sync(ctx, d, rsList)
 	}
 
++	// 判断deployment对象的更新策略
 	switch d.Spec.Strategy.Type {
 	case apps.RecreateDeploymentStrategyType:
 		return dc.rolloutRecreate(ctx, d, rsList, podMap)
