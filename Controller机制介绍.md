@@ -94,5 +94,67 @@ func NewDeploymentController(dInformer appsinformers.DeploymentInformer, rsInfor
 	dc.podListerSynced = podInformer.Informer().HasSynced
 	return dc, nil
 }
+```
 
+- Deployment Controller的创建
+
+在kube-controller-manager里https://github.com/kubernetes/kubernetes/blob/master/cmd/kube-controller-manager/app/apps.go
+```diff
+func startDeploymentController(ctx context.Context, controllerContext ControllerContext) (controller.Interface, bool, error) {
++	// 调用上面的NewDeploymentController
+	dc, err := deployment.NewDeploymentController(
+		controllerContext.InformerFactory.Apps().V1().Deployments(),
+		controllerContext.InformerFactory.Apps().V1().ReplicaSets(),
+		controllerContext.InformerFactory.Core().V1().Pods(),
+		controllerContext.ClientBuilder.ClientOrDie("deployment-controller"),
+	)
++	// Deployment Controller投入执行	
+	go dc.Run(ctx, int(controllerContext.ComponentConfig.DeploymentController.ConcurrentDeploymentSyncs))
+	return nil, true, nil
+}
+```
+
+- Deployment Controller的执行
+
+```diff
+// Run begins watching and syncing.
+func (dc *DeploymentController) Run(ctx context.Context, workers int) {
+	defer utilruntime.HandleCrash()
+	defer dc.queue.ShutDown()
+
+	klog.InfoS("Starting controller", "controller", "deployment")
+	defer klog.InfoS("Shutting down controller", "controller", "deployment")
+
+	if !cache.WaitForNamedCacheSync("deployment", ctx.Done(), dc.dListerSynced, dc.rsListerSynced, dc.podListerSynced) {
+		return
+	}
+
+	for i := 0; i < workers; i++ {
++		// 多协程执行dc.worker	
+		go wait.UntilWithContext(ctx, dc.worker, time.Second)
+	}
+
+	<-ctx.Done()
+}
+
+// worker runs a worker thread that just dequeues items, processes them, and marks them done.
+// It enforces that the syncHandler is never invoked concurrently with the same key.
+func (dc *DeploymentController) worker(ctx context.Context) {
++	// 处理workqueue里每一条item
+	for dc.processNextWorkItem(ctx) {
+	}
+}
+
+func (dc *DeploymentController) processNextWorkItem(ctx context.Context) bool {
+	key, quit := dc.queue.Get()
+	if quit {
+		return false
+	}
+	defer dc.queue.Done(key)
+
+	err := dc.syncHandler(ctx, key.(string))
+	dc.handleErr(err, key)
+
+	return true
+}
 ```
