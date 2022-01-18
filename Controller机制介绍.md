@@ -96,6 +96,242 @@ func NewDeploymentController(dInformer appsinformers.DeploymentInformer, rsInfor
 }
 ```
 
+- EventHandler
+
+三种EventHandler，分别对应Deployment，ReplicaSet和Pod
+
+1. Deployment的EventHandler
+```diff
+func (dc *DeploymentController) addDeployment(obj interface{}) {
+	d := obj.(*apps.Deployment)
+	klog.V(4).InfoS("Adding deployment", "deployment", klog.KObj(d))
+	dc.enqueueDeployment(d)
+}
+
+func (dc *DeploymentController) updateDeployment(old, cur interface{}) {
+	oldD := old.(*apps.Deployment)
+	curD := cur.(*apps.Deployment)
+	klog.V(4).InfoS("Updating deployment", "deployment", klog.KObj(oldD))
+	dc.enqueueDeployment(curD)
+}
+
+func (dc *DeploymentController) deleteDeployment(obj interface{}) {
+	d, ok := obj.(*apps.Deployment)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("couldn't get object from tombstone %#v", obj))
+			return
+		}
+		d, ok = tombstone.Obj.(*apps.Deployment)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("tombstone contained object that is not a Deployment %#v", obj))
+			return
+		}
+	}
+	klog.V(4).InfoS("Deleting deployment", "deployment", klog.KObj(d))
+	dc.enqueueDeployment(d)
+}
+
++ // dc.enqueueDeployment = dc.enqueue
+func (dc *DeploymentController) enqueue(deployment *apps.Deployment) {
+	key, err := controller.KeyFunc(deployment)
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("couldn't get key for object %#v: %v", deployment, err))
+		return
+	}
+
+	dc.queue.Add(key)
+}
+```
+2. ReplicaSet的EventHandler
+```diff
+// addReplicaSet enqueues the deployment that manages a ReplicaSet when the ReplicaSet is created.
+func (dc *DeploymentController) addReplicaSet(obj interface{}) {
+	rs := obj.(*apps.ReplicaSet)
+
+	if rs.DeletionTimestamp != nil {
+		// On a restart of the controller manager, it's possible for an object to
+		// show up in a state that is already pending deletion.
+		dc.deleteReplicaSet(rs)
+		return
+	}
+
+	// If it has a ControllerRef, that's all that matters.
+	if controllerRef := metav1.GetControllerOf(rs); controllerRef != nil {
+		d := dc.resolveControllerRef(rs.Namespace, controllerRef)
+		if d == nil {
+			return
+		}
+		klog.V(4).InfoS("ReplicaSet added", "replicaSet", klog.KObj(rs))
+		dc.enqueueDeployment(d)
+		return
+	}
+
+	// Otherwise, it's an orphan. Get a list of all matching Deployments and sync
+	// them to see if anyone wants to adopt it.
+	ds := dc.getDeploymentsForReplicaSet(rs)
+	if len(ds) == 0 {
+		return
+	}
+	klog.V(4).InfoS("Orphan ReplicaSet added", "replicaSet", klog.KObj(rs))
+	for _, d := range ds {
+		dc.enqueueDeployment(d)
+	}
+}
+
+// getDeploymentsForReplicaSet returns a list of Deployments that potentially
+// match a ReplicaSet.
+func (dc *DeploymentController) getDeploymentsForReplicaSet(rs *apps.ReplicaSet) []*apps.Deployment {
+	deployments, err := util.GetDeploymentsForReplicaSet(dc.dLister, rs)
+	if err != nil || len(deployments) == 0 {
+		return nil
+	}
+	// Because all ReplicaSet's belonging to a deployment should have a unique label key,
+	// there should never be more than one deployment returned by the above method.
+	// If that happens we should probably dynamically repair the situation by ultimately
+	// trying to clean up one of the controllers, for now we just return the older one
+	if len(deployments) > 1 {
+		// ControllerRef will ensure we don't do anything crazy, but more than one
+		// item in this list nevertheless constitutes user error.
+		klog.V(4).InfoS("user error! more than one deployment is selecting replica set",
+			"replicaSet", klog.KObj(rs), "labels", rs.Labels, "deployment", klog.KObj(deployments[0]))
+	}
+	return deployments
+}
+
+// updateReplicaSet figures out what deployment(s) manage a ReplicaSet when the ReplicaSet
+// is updated and wake them up. If the anything of the ReplicaSets have changed, we need to
+// awaken both the old and new deployments. old and cur must be *apps.ReplicaSet
+// types.
+func (dc *DeploymentController) updateReplicaSet(old, cur interface{}) {
+	curRS := cur.(*apps.ReplicaSet)
+	oldRS := old.(*apps.ReplicaSet)
+	if curRS.ResourceVersion == oldRS.ResourceVersion {
+		// Periodic resync will send update events for all known replica sets.
+		// Two different versions of the same replica set will always have different RVs.
+		return
+	}
+
+	curControllerRef := metav1.GetControllerOf(curRS)
+	oldControllerRef := metav1.GetControllerOf(oldRS)
+	controllerRefChanged := !reflect.DeepEqual(curControllerRef, oldControllerRef)
+	if controllerRefChanged && oldControllerRef != nil {
+		// The ControllerRef was changed. Sync the old controller, if any.
+		if d := dc.resolveControllerRef(oldRS.Namespace, oldControllerRef); d != nil {
+			dc.enqueueDeployment(d)
+		}
+	}
+
+	// If it has a ControllerRef, that's all that matters.
+	if curControllerRef != nil {
+		d := dc.resolveControllerRef(curRS.Namespace, curControllerRef)
+		if d == nil {
+			return
+		}
+		klog.V(4).InfoS("ReplicaSet updated", "replicaSet", klog.KObj(curRS))
+		dc.enqueueDeployment(d)
+		return
+	}
+
+	// Otherwise, it's an orphan. If anything changed, sync matching controllers
+	// to see if anyone wants to adopt it now.
+	labelChanged := !reflect.DeepEqual(curRS.Labels, oldRS.Labels)
+	if labelChanged || controllerRefChanged {
+		ds := dc.getDeploymentsForReplicaSet(curRS)
+		if len(ds) == 0 {
+			return
+		}
+		klog.V(4).InfoS("Orphan ReplicaSet updated", "replicaSet", klog.KObj(curRS))
+		for _, d := range ds {
+			dc.enqueueDeployment(d)
+		}
+	}
+}
+
+// deleteReplicaSet enqueues the deployment that manages a ReplicaSet when
+// the ReplicaSet is deleted. obj could be an *apps.ReplicaSet, or
+// a DeletionFinalStateUnknown marker item.
+func (dc *DeploymentController) deleteReplicaSet(obj interface{}) {
+	rs, ok := obj.(*apps.ReplicaSet)
+
+	// When a delete is dropped, the relist will notice a pod in the store not
+	// in the list, leading to the insertion of a tombstone object which contains
+	// the deleted key/value. Note that this value might be stale. If the ReplicaSet
+	// changed labels the new deployment will not be woken up till the periodic resync.
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("couldn't get object from tombstone %#v", obj))
+			return
+		}
+		rs, ok = tombstone.Obj.(*apps.ReplicaSet)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("tombstone contained object that is not a ReplicaSet %#v", obj))
+			return
+		}
+	}
+
+	controllerRef := metav1.GetControllerOf(rs)
+	if controllerRef == nil {
+		// No controller should care about orphans being deleted.
+		return
+	}
+	d := dc.resolveControllerRef(rs.Namespace, controllerRef)
+	if d == nil {
+		return
+	}
+	klog.V(4).InfoS("ReplicaSet deleted", "replicaSet", klog.KObj(rs))
+	dc.enqueueDeployment(d)
+}
+```
+
+3. Pod的EventHandler，只注册了Delete一个接口函数
+
+```diff
+// deletePod will enqueue a Recreate Deployment once all of its pods have stopped running.
+func (dc *DeploymentController) deletePod(obj interface{}) {
+	pod, ok := obj.(*v1.Pod)
+
+	// When a delete is dropped, the relist will notice a pod in the store not
+	// in the list, leading to the insertion of a tombstone object which contains
+	// the deleted key/value. Note that this value might be stale. If the Pod
+	// changed labels the new deployment will not be woken up till the periodic resync.
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("couldn't get object from tombstone %#v", obj))
+			return
+		}
+		pod, ok = tombstone.Obj.(*v1.Pod)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("tombstone contained object that is not a pod %#v", obj))
+			return
+		}
+	}
+	klog.V(4).InfoS("Pod deleted", "pod", klog.KObj(pod))
+	if d := dc.getDeploymentForPod(pod); d != nil && d.Spec.Strategy.Type == apps.RecreateDeploymentStrategyType {
+		// Sync if this Deployment now has no more Pods.
+		rsList, err := util.ListReplicaSets(d, util.RsListFromClient(dc.client.AppsV1()))
+		if err != nil {
+			return
+		}
+		podMap, err := dc.getPodMapForDeployment(d, rsList)
+		if err != nil {
+			return
+		}
+		numPods := 0
+		for _, podList := range podMap {
+			numPods += len(podList)
+		}
+		if numPods == 0 {
+			dc.enqueueDeployment(d)
+		}
+	}
+}
+```
+
+
 - Deployment Controller的创建
 
 在kube-controller-manager里https://github.com/kubernetes/kubernetes/blob/master/cmd/kube-controller-manager/app/apps.go
