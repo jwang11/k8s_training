@@ -116,6 +116,7 @@ func startDeploymentController(ctx context.Context, controllerContext Controller
 
 - Deployment Controller的执行
 
+通常套路就是起几个worker协程，每个协程从workqueue上获取item，用processNextWorkItem依次处理。
 ```diff
 // Run begins watching and syncing.
 func (dc *DeploymentController) Run(ctx context.Context, workers int) {
@@ -130,7 +131,7 @@ func (dc *DeploymentController) Run(ctx context.Context, workers int) {
 	}
 
 	for i := 0; i < workers; i++ {
-+		// 多协程执行dc.worker	
++		// 多协程执行dc.worker，来处理workqueue	
 		go wait.UntilWithContext(ctx, dc.worker, time.Second)
 	}
 
@@ -152,9 +153,90 @@ func (dc *DeploymentController) processNextWorkItem(ctx context.Context) bool {
 	}
 	defer dc.queue.Done(key)
 
++	// 调用syncHandler, 前面dc.syncHandler = dc.syncDeployment
 	err := dc.syncHandler(ctx, key.(string))
 	dc.handleErr(err, key)
 
 	return true
+}
+```
+
+- syncDeployment处理workqueue的item，key作为参数传进来
+```diff
+// syncDeployment will sync the deployment with the given key.
+// This function is not meant to be invoked concurrently with the same key.
+func (dc *DeploymentController) syncDeployment(ctx context.Context, key string) error {
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+
+	startTime := time.Now()
+	klog.V(4).InfoS("Started syncing deployment", "deployment", klog.KRef(namespace, name), "startTime", startTime)
+	defer func() {
+		klog.V(4).InfoS("Finished syncing deployment", "deployment", klog.KRef(namespace, name), "duration", time.Since(startTime))
+	}()
+
+	deployment, err := dc.dLister.Deployments(namespace).Get(name)
+
+	// Deep-copy otherwise we are mutating our cache.
+	// TODO: Deep-copy only when needed.
+	d := deployment.DeepCopy()
+
+	everything := metav1.LabelSelector{}
+	if reflect.DeepEqual(d.Spec.Selector, &everything) {
+		dc.eventRecorder.Eventf(d, v1.EventTypeWarning, "SelectingAll", "This deployment is selecting all pods. A non-empty selector is required.")
+		if d.Status.ObservedGeneration < d.Generation {
+			d.Status.ObservedGeneration = d.Generation
+			dc.client.AppsV1().Deployments(d.Namespace).UpdateStatus(ctx, d, metav1.UpdateOptions{})
+		}
+		return nil
+	}
+
+	// List ReplicaSets owned by this Deployment, while reconciling ControllerRef
+	// through adoption/orphaning.
+	rsList, err := dc.getReplicaSetsForDeployment(ctx, d)
+
+	// List all Pods owned by this Deployment, grouped by their ReplicaSet.
+	// Current uses of the podMap are:
+	//
+	// * check if a Pod is labeled correctly with the pod-template-hash label.
+	// * check that no old Pods are running in the middle of Recreate Deployments.
+	podMap, err := dc.getPodMapForDeployment(d, rsList)
+
+	if d.DeletionTimestamp != nil {
+		return dc.syncStatusOnly(ctx, d, rsList)
+	}
+
+	// Update deployment conditions with an Unknown condition when pausing/resuming
+	// a deployment. In this way, we can be sure that we won't timeout when a user
+	// resumes a Deployment with a set progressDeadlineSeconds.
+	if err = dc.checkPausedConditions(ctx, d); err != nil {
+		return err
+	}
+
+	if d.Spec.Paused {
+		return dc.sync(ctx, d, rsList)
+	}
+
+	// rollback is not re-entrant in case the underlying replica sets are updated with a new
+	// revision so we should ensure that we won't proceed to update replica sets until we
+	// make sure that the deployment has cleaned up its rollback spec in subsequent enqueues.
+	if getRollbackTo(d) != nil {
+		return dc.rollback(ctx, d, rsList)
+	}
+
+	scalingEvent, err := dc.isScalingEvent(ctx, d, rsList)
+	if err != nil {
+		return err
+	}
+	if scalingEvent {
+		return dc.sync(ctx, d, rsList)
+	}
+
+	switch d.Spec.Strategy.Type {
+	case apps.RecreateDeploymentStrategyType:
+		return dc.rolloutRecreate(ctx, d, rsList, podMap)
+	case apps.RollingUpdateDeploymentStrategyType:
+		return dc.rolloutRolling(ctx, d, rsList)
+	}
+	return fmt.Errorf("unexpected deployment strategy type: %s", d.Spec.Strategy.Type)
 }
 ```
