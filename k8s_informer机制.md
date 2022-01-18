@@ -1,4 +1,4 @@
-# informer机制简介
+# K8S Informer机制
 
 ## Informer工作流程
 ![Informer机制流程图](informer机制流程图2.jpeg)
