@@ -190,9 +190,14 @@ func (dc *DeploymentController) syncDeployment(ctx context.Context, key string) 
 		return nil
 	}
 
++	// 对集群中与deployment对象相同命名空间下的所有replicaset对象做处理，若发现匹配但没有关联deployment的replicaset则通过设置ownerReferences字段与deployment关联，
++	// 已关联但不匹配的则删除对应的ownerReferences，最后获取返回集群中与Deployment关联匹配的ReplicaSet对象列表；
 	// List ReplicaSets owned by this Deployment, while reconciling ControllerRef
 	// through adoption/orphaning.
 	rsList, err := dc.getReplicaSetsForDeployment(ctx, d)
+
+
++	// 根据deployment对象的selector，获取当前deployment对象关联的pod，根据deployment所属的replicaset对象的UID对pod进行分类并返回，返回值类型为map[types.UID][]*v1.Pod；
 
 	// List all Pods owned by this Deployment, grouped by their ReplicaSet.
 	// Current uses of the podMap are:
@@ -208,9 +213,7 @@ func (dc *DeploymentController) syncDeployment(ctx context.Context, key string) 
 	// Update deployment conditions with an Unknown condition when pausing/resuming
 	// a deployment. In this way, we can be sure that we won't timeout when a user
 	// resumes a Deployment with a set progressDeadlineSeconds.
-	if err = dc.checkPausedConditions(ctx, d); err != nil {
-		return err
-	}
+	dc.checkPausedConditions(ctx, d)
 
 	if d.Spec.Paused {
 		return dc.sync(ctx, d, rsList)
@@ -224,9 +227,7 @@ func (dc *DeploymentController) syncDeployment(ctx context.Context, key string) 
 	}
 
 	scalingEvent, err := dc.isScalingEvent(ctx, d, rsList)
-	if err != nil {
-		return err
-	}
+
 	if scalingEvent {
 		return dc.sync(ctx, d, rsList)
 	}
