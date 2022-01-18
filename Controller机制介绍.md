@@ -249,3 +249,78 @@ func (dc *DeploymentController) syncDeployment(ctx context.Context, key string) 
 	return fmt.Errorf("unexpected deployment strategy type: %s", d.Spec.Strategy.Type)
 }
 ```
+
+### deployment和replicaset的关联
+
+遍历与deployment对象相同命名空间下的所有replicaset对象，调用m.ClaimObject做处理，m.ClaimObject的作用主要是将匹配但没有关联deployment的replicaset则通过设置ownerReferences字段与deployment 关联，已关联但不匹配的则删除对应的ownerReferences。
+
+```diff
+// NewReplicaSetControllerRefManager returns a ReplicaSetControllerRefManager that exposes
+// methods to manage the controllerRef of ReplicaSets.
+//
+// The CanAdopt() function can be used to perform a potentially expensive check
+// (such as a live GET from the API server) prior to the first adoption.
+// It will only be called (at most once) if an adoption is actually attempted.
+// If CanAdopt() returns a non-nil error, all adoptions will fail.
+//
+// NOTE: Once CanAdopt() is called, it will not be called again by the same
+//       ReplicaSetControllerRefManager instance. Create a new instance if it
+//       makes sense to check CanAdopt() again (e.g. in a different sync pass).
+func NewReplicaSetControllerRefManager(
+	rsControl RSControlInterface,
+	controller metav1.Object,
+	selector labels.Selector,
+	controllerKind schema.GroupVersionKind,
+	canAdopt func(ctx context.Context) error,
+) *ReplicaSetControllerRefManager {
+	return &ReplicaSetControllerRefManager{
+		BaseControllerRefManager: BaseControllerRefManager{
+			Controller:   controller,
+			Selector:     selector,
+			CanAdoptFunc: canAdopt,
+		},
+		controllerKind: controllerKind,
+		rsControl:      rsControl,
+	}
+}
+
+// ClaimReplicaSets tries to take ownership of a list of ReplicaSets.
+//
+// It will reconcile the following:
+//   * Adopt orphans if the selector matches.
+//   * Release owned objects if the selector no longer matches.
+//
+// A non-nil error is returned if some form of reconciliation was attempted and
+// failed. Usually, controllers should try again later in case reconciliation
+// is still needed.
+//
+// If the error is nil, either the reconciliation succeeded, or no
+// reconciliation was necessary. The list of ReplicaSets that you now own is
+// returned.
+func (m *ReplicaSetControllerRefManager) ClaimReplicaSets(ctx context.Context, sets []*apps.ReplicaSet) ([]*apps.ReplicaSet, error) {
+	var claimed []*apps.ReplicaSet
+	var errlist []error
+
+	match := func(obj metav1.Object) bool {
+		return m.Selector.Matches(labels.Set(obj.GetLabels()))
+	}
+	adopt := func(ctx context.Context, obj metav1.Object) error {
+		return m.AdoptReplicaSet(ctx, obj.(*apps.ReplicaSet))
+	}
+	release := func(ctx context.Context, obj metav1.Object) error {
+		return m.ReleaseReplicaSet(ctx, obj.(*apps.ReplicaSet))
+	}
+
+	for _, rs := range sets {
+		ok, err := m.ClaimObject(ctx, rs, match, adopt, release)
+		if err != nil {
+			errlist = append(errlist, err)
+			continue
+		}
+		if ok {
+			claimed = append(claimed, rs)
+		}
+	}
+	return claimed, utilerrors.NewAggregate(errlist)
+}
+```
