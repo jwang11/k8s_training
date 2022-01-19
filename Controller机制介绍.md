@@ -571,6 +571,7 @@ func (m *ReplicaSetControllerRefManager) ClaimReplicaSets(ctx context.Context, s
 若所有pod都停止了，将新的rs进行升级，即将其副本数置为deployment的副本数；
 
 - Rollout
+
 从开始到创建新的 rs 的过程与 rolloutRecreate 过程一致，唯一区别在于，设置新 rs 副本数的过程。在 rolloutRolling 的过程中，新的 rs 的副本数为 deploy.replicas+maxSurge-currentPodCount
 
 然后到了增减新旧 rs 副本数的过程。主要为先 scale up 新 rs，再 scale down 旧 rs。scale up 新 rs 的过程与上述一致；scale down 旧 rs 的过程为先计算一个最大 scale down 副本数，若小于 0 则不做任何操作；然后在 scale down 的时候做了一个优化，先 scale down 不正常的 rs，可以保证先删除那些不健康的副本；最后如果还有余额，再 scale down 正常的 rs。
