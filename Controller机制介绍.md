@@ -1,6 +1,6 @@
 # controller机制介绍
+|| 以Deployment controller为例，看看k8s ontroller是如何实现的。
 
-以Deployment controller为例，看看k8s ontroller是如何实现的。
 deployment controller是kube-controller-manager组件中众多控制器中的一个，是 deployment 资源对象的控制器，其通过对deployment、replicaset、pod三种资源的监听，当三种资源发生变化时会触发 deployment controller 对相应的deployment资源进行调谐操作，从而完成deployment的扩缩容、暂停恢复、更新、回滚、状态status更新、所属的旧replicaset清理等操作。
 
 deployment 是 kubernetes 中用来部署无状态应用的一个对象，也是最常用的一种对象。
