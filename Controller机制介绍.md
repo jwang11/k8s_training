@@ -552,3 +552,19 @@ func (m *ReplicaSetControllerRefManager) ClaimReplicaSets(ctx context.Context, s
 	return claimed, utilerrors.NewAggregate(errlist)
 }
 ```
+
+### Deployment更新策略
+
+如果deployment的更新策略是Recreate，其过程是将旧的pod删除，再启动新的pod
+首先获得当前 deployment 的所有rs，排序找出最新的rs，将其pod template与deployment的pod template比较，若不一致需要创建新的rs；
+创建新的rs的过程为：计算当前deployment的pod template的hash值，将其增加至rs label及selector中；
+对所有旧的 rs 计算出最大的 revision，将其加一，作为新 rs 的 revision，为新的 rs 设置如下注解：
+```
+"deployment.kubernetes.io/revision"
+"deployment.kubernetes.io/desired-replicas"
+"deployment.kubernetes.io/max-replicas"
+```
+如果当前deployment的revision不是最新，将其设为最新；如果需要更新状态，则更新其状态；
+将旧的rs进行降级，即将其副本数设为0；
+判断当前所有旧的pod是否停止，判断条件为pod状态为failed或succeed，unknown或其他所有状态都不是停止状态；若并非所有pod都停止了，则退出本次操作，下一个循环再处理；
+若所有pod都停止了，将新的rs进行升级，即将其副本数置为deployment的副本数；
