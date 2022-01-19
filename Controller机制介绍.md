@@ -1,14 +1,16 @@
 # controller机制介绍
->> 以Deployment controller为例，看看k8s ontroller是如何实现的。
+>> 以Deployment controller为例，介绍8s ontroller是如何实现的。
+
+deployment controller是kube-controller-manager组件中众多控制器中的一个，是deployment资源对象的控制器，其通过对deployment、replicaset、pod三种资源的监听，当三种资源发生变化时会触发对相应的deployment资源进行调谐操作，从而完成deployment的扩缩容、暂停恢复、更新、回滚、状态status更新、所属的旧replicaset清理等操作。
 
 ![Deployment RS_POD关系图](deployment_replicaset_pod.png)
 
-K8S的Controller模式，经常是顶层资源通过控制下层资源，来拓展新能力。deployment并没有直接对pod进行管理，是通过管理ReplicaSet 的副本控制。deployment 通过对 rs 的控制实现了版本管理：每次发布对应一个版本，每个版本有一个 rs，在注解中标识版本号，而 rs 再每次根据 pod template 和副本数运行相应的 pod。deployment 只需要保证任何情况下 rs 的状态都在预期，rs 保证任何情况下 pod 的状态都在预期。
- 
-deployment controller是kube-controller-manager组件中众多控制器中的一个，是 deployment 资源对象的控制器，其通过对deployment、replicaset、pod三种资源的监听，当三种资源发生变化时会触发 deployment controller 对相应的deployment资源进行调谐操作，从而完成deployment的扩缩容、暂停恢复、更新、回滚、状态status更新、所属的旧replicaset清理等操作。
 
-deployment 是 kubernetes 中用来部署无状态应用的一个对象，也是最常用的一种对象。
-deployment 的本质是控制 replicaSet，replicaSet 会控制 pod，然后由 controller 驱动各个对象达到期望状态。
+K8S的Controller模式，经常是顶层资源通过控制下层资源，来拓展新能力。deployment并没有直接对pod进行管理，是通过管理ReplicaSet对Pod的副本控制。deployment通过对ReplicaSet的控制实现了版本管理：
+- 每次发布对应一个版本，每个版本有一个ReplicaSet，在注解中标识版本号
+- ReplicaSet再根据pod template和副本数运行相应的pod。
+
+deployment的本质是控制replicaSet，replicaSet会控制pod，然后由controller驱动各个对象达到期望状态。
 
 ## Deployment Controller
 ![Deployment Controller代码流程图](deployment_controller_workflow.png)
