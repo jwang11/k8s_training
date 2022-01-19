@@ -555,7 +555,8 @@ func (m *ReplicaSetControllerRefManager) ClaimReplicaSets(ctx context.Context, s
 
 ### Deployment更新策略
 
-如果deployment的更新策略是Recreate，其过程是将旧的pod删除，再启动新的pod
+- 如果deployment的更新策略是Recreate，其过程是将旧的pod删除，再启动新的pod
+
 首先获得当前 deployment 的所有rs，排序找出最新的rs，将其pod template与deployment的pod template比较，若不一致需要创建新的rs；
 创建新的rs的过程为：计算当前deployment的pod template的hash值，将其增加至rs label及selector中；
 对所有旧的 rs 计算出最大的 revision，将其加一，作为新 rs 的 revision，为新的 rs 设置如下注解：
@@ -568,3 +569,8 @@ func (m *ReplicaSetControllerRefManager) ClaimReplicaSets(ctx context.Context, s
 将旧的rs进行降级，即将其副本数设为0；
 判断当前所有旧的pod是否停止，判断条件为pod状态为failed或succeed，unknown或其他所有状态都不是停止状态；若并非所有pod都停止了，则退出本次操作，下一个循环再处理；
 若所有pod都停止了，将新的rs进行升级，即将其副本数置为deployment的副本数；
+
+- Rollout
+从开始到创建新的 rs 的过程与 rolloutRecreate 过程一致，唯一区别在于，设置新 rs 副本数的过程。在 rolloutRolling 的过程中，新的 rs 的副本数为 deploy.replicas+maxSurge-currentPodCount
+
+然后到了增减新旧 rs 副本数的过程。主要为先 scale up 新 rs，再 scale down 旧 rs。scale up 新 rs 的过程与上述一致；scale down 旧 rs 的过程为先计算一个最大 scale down 副本数，若小于 0 则不做任何操作；然后在 scale down 的时候做了一个优化，先 scale down 不正常的 rs，可以保证先删除那些不健康的副本；最后如果还有余额，再 scale down 正常的 rs。
