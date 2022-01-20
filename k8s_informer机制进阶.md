@@ -4,8 +4,8 @@
 
 ## Reflector
 
-Reflector 的主要职责是从 apiserver 拉取并持续监听 (ListAndWatch) 相关资源类型的增删改(Add/Update/Delete) 事件, 存储在由 DeltaFIFO 实现的本地缓存(local Store) 中.
-首先看一下 Reflector 结构体定义:
+Reflector 的主要职责是从apiserver拉取并持续监听(ListAndWatch)相关资源类型的增删改(Add/Update/Delete)事件, 存储在由DeltaFIFO实现的本地缓存(local Store)中。
+首先看一下Reflector结构体定义:
 ```diff
 // staging/src/k8s.io/client-go/tools/cache/reflector.go
 type Reflector struct {
@@ -49,4 +49,52 @@ type Reflector struct {
     watchErrorHandler WatchErrorHandler
 }
 ```
+第一次拉取全量资源(目标资源类型) 后通过syncWith函数全量替换(Replace)到DeltaFIFO queue/items 中，之后通过持续监听 Watch(目标资源类型) 增量事件，并去重更新到DeltaFIFO queue/items中，等待被消费。
 
+## DeltaFifo
+
+DeltaFIFO 的职责是通过队列加锁处理(queueActionLocked)、去重(dedupDeltas)、存储在由 DeltaFIFO 实现的本地缓存(local Store) 中，包括 queue(仅存 objKeys) 和 items(存 objKeys 和对应的 Deltas 增量变化)，并通过 Pop 不断消费，通过 Process(item) 处理相关逻辑。
+
+
+```difff
+// staging/src/k8s.io/client-go/tools/cache/delta_fifo.go
+type DeltaFIFO struct {
+    // 读写锁、条件变量
+    lock sync.RWMutex
+    cond sync.Cond
+
+    // kv 存储：objKey1->Deltas[obj1-Added, obj1-Updated...]
+    items map[string]Deltas
+
+    // 只存储所有 objKeys
+    queue []string
+
+    // 是否已经填充：通过 Replace() 接口将第一批对象放入队列，或者第一次调用增、删、改接口时标记为true
+    populated bool
+    // 通过 Replace() 接口将第一批对象放入队列的数量
+    initialPopulationCount int
+
+    // keyFunc 用来从某个 obj 中获取其对应的 objKey
+    keyFunc KeyFunc
+
+    // 已知对象，其实就是 Indexer
+    knownObjects KeyListerGetter
+
+    // 队列是否已经关闭
+    closed bool
+
+    // 以 Replaced 类型发送(为了兼容老版本的 Sync)
+    emitDeltaTypeReplaced bool
+}
+
++ // Delta的类型有5种
+type DeltaType string
+
+const (
+    Added   DeltaType = "Added"
+    Updated DeltaType = "Updated"
+    Deleted DeltaType = "Deleted"
+    Replaced DeltaType = "Replaced" // 第一次或重新同步
+    Sync DeltaType = "Sync" // 老版本重新同步叫 Sync
+)
+```
