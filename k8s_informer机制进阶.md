@@ -1,6 +1,6 @@
 # K8S Informer进阶
 >> K8s中有几十种类型的资源，如何能让 K8s 内部以及外部用户方便、高效的获取某类资源的变化，就是Informer的工作。
->> 在k8s_informer机制一文，介绍了informer的大致工作流程，本文是该部分进阶学习，重点在Reflector，DeltaFifo和Indexer。
+>> k8s_informer机制一文已经介绍了informer的大致工作流程，本文是Informer进阶学习，重点分析Reflector，DeltaFifo和Indexer。
 
 
 ![Informer机制详细流程图](informer机制流程图3.png)
