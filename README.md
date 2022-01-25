@@ -2,7 +2,7 @@
 training of k8s
 
 ## Installation
-在Ubuntu 20.04下，No Docker模式国内安装最新K8S（1.22.3），网络插件flannel
+在Ubuntu 20.04下，No Docker模式安装最新K8S（1.22.3），网络插件flannel
 > master:192.168.1.13 <br>
 > worker:192.168.1.10
 
