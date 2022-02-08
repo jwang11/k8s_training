@@ -98,3 +98,6 @@ func run(command *cobra.Command) int {
 	return 0
 }
 ```
+
+## kubelet启动
+![kubelet启动流程](kubelet启动.png)
