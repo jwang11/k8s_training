@@ -177,6 +177,7 @@ HTTP server: The kubelet can also listen for HTTP and respond to a simple API
 				klog.InfoS("Warning: For remote container runtime, --pod-infra-container-image is ignored in kubelet, which should be set in that remote runtime instead")
 			}
 
++			// 加载 kubelet 配置文件
 			// load kubelet config file, if provided
 			if configFile := kubeletFlags.KubeletConfigFile; len(configFile) > 0 {
 				kubeletConfig, err = loadConfigFile(configFile)
@@ -244,6 +245,7 @@ HTTP server: The kubelet can also listen for HTTP and respond to a simple API
 			// log the kubelet's config for inspection
 			klog.V(5).InfoS("KubeletConfiguration", "configuration", kubeletServer.KubeletConfiguration)
 
++			// 调用Run函数
 			// run the kubelet
 			return Run(ctx, kubeletServer, kubeletDeps, utilfeature.DefaultFeatureGate)
 		},
@@ -283,7 +285,7 @@ func Run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 	if err := initForOS(s.KubeletFlags.WindowsService, s.KubeletFlags.WindowsPriorityClass); err != nil {
 		return fmt.Errorf("failed OS init: %w", err)
 	}
-+	// run函数调用	
++	// 调用run函数	
 	if err := run(ctx, s, kubeDeps, featureGate); err != nil {
 		return fmt.Errorf("failed to run Kubelet: %w", err)
 	}
@@ -291,6 +293,7 @@ func Run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 }
 
 func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Dependencies, featureGate featuregate.FeatureGate) (err error) {
++	// 为kubelet设置默认的FeatureGates
 	// Set global feature gates based on the value on the initial KubeletServer
 	err = utilfeature.DefaultMutableFeatureGate.SetFromMap(s.KubeletConfiguration.FeatureGates)
 
@@ -322,6 +325,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 		}
 	}
 
++	// 将当前的配置文件注册到http_server/configz URL中
 	// Register current configuration with /configz endpoint
 	err = initConfigz(&s.KubeletConfiguration)
 
@@ -329,12 +333,14 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 		metrics.SetShowHidden()
 	}
 
++	// 判断是否为standalone模式
 	// About to get clients and such, detect standaloneMode
 	standaloneMode := true
 	if len(s.KubeConfig) > 0 {
 		standaloneMode = false
 	}
 
++	// 初始化kubeDeps
 	if kubeDeps == nil {
 		kubeDeps, err = UnsecuredDependencies(s, featureGate)
 	}
@@ -355,12 +361,13 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 
 	// if in standalone mode, indicate as much by setting all clients to nil
 	switch {
++	// 如果是standalone模式将所有client设置为nil
 	case standaloneMode:
 		kubeDeps.KubeClient = nil
 		kubeDeps.EventClient = nil
 		kubeDeps.HeartbeatClient = nil
 		klog.InfoS("Standalone mode, no API client")
-
++	// 为kubeDeps初始化 KubeClient，EventClient，HeartbeatClient模块
 	case kubeDeps.KubeClient == nil, kubeDeps.EventClient == nil, kubeDeps.HeartbeatClient == nil:
 		clientConfig, closeAllConns, err := buildKubeletClientConfig(ctx, s, nodeName)
 		if err != nil {
@@ -415,6 +422,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 		cgroupRoots = append(cgroupRoots, kubeletCgroup)
 	}
 
++	// 获取Container Runtime的Cgroup
 	runtimeCgroup, err := cm.GetRuntimeContainer(s.ContainerRuntime, s.RuntimeCgroups)
 	if err != nil {
 		klog.InfoS("Failed to get the container runtime's cgroup. Runtime system container metrics may be missing.", "err", err)
@@ -428,6 +436,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 		cgroupRoots = append(cgroupRoots, s.SystemCgroups)
 	}
 
++	// 初始化cadvisor
 	if kubeDeps.CAdvisorInterface == nil {
 		imageFsInfoProvider := cadvisor.NewImageFsInfoProvider(s.ContainerRuntime, s.RemoteRuntimeEndpoint)
 		kubeDeps.CAdvisorInterface, err = cadvisor.New(imageFsInfoProvider, s.RootDirectory, cgroupRoots, cadvisor.UsingLegacyCadvisorStats(s.ContainerRuntime, s.RemoteRuntimeEndpoint))
@@ -436,6 +445,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 	// Setup event recorder if required.
 	makeEventRecorder(kubeDeps, nodeName)
 
++	// 初始化ContainerManager
 	if kubeDeps.ContainerManager == nil {
 		if s.CgroupsPerQOS && s.CgroupRoot == "" {
 			klog.InfoS("--cgroups-per-qos enabled, but --cgroup-root was not specified.  defaulting to /")
@@ -478,6 +488,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 			}
 		}
 
++		// 调用NewContainerManager生成ContainerManager
 		kubeDeps.ContainerManager, err = cm.NewContainerManager(
 			kubeDeps.Mounter,
 			kubeDeps.CAdvisorInterface,
@@ -517,6 +528,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 			kubeDeps.Recorder)
 	}
 
++	// 为kubelet进程设置oom分数
 	// TODO(vmarmol): Do this through container config.
 	oomAdjuster := kubeDeps.OOMAdjuster
 	if err := oomAdjuster.ApplyOOMScoreAdj(0, int(s.OOMScoreAdj)); err != nil {
