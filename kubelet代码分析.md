@@ -1367,7 +1367,12 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 }
 ```
 
-- 进入syncLoop循环来处理resource的各种change
+- 进入syncLoop循环来处理Pod的各种change
+
+kubelet的主循环方法。它从不同的管道(file，http，apiserver)监听pod的变化，汇聚起来。当有新的变化发生时，它会调用对应的函数，保证pod处于期望的状态
+
+首先定义了一个syncTicker和housekeepingTicker，即使没有需要更新的pod配置，kubelet也会定时去做同步和清理pod的工作。
+然后在for循环中一直调用syncLoopIteration，如果在每次循环过程中出现错误时，kubelet会记录到runtimeState中，遇到错误就等待5秒中继续循环。
 ```diff
 // syncLoop is the main loop for processing changes. It watches for changes from
 // three channels (file, apiserver, and http) and creates a union of them. For
