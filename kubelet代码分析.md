@@ -587,24 +587,10 @@ RunKubelet 主要流程：
   - hostPIDSources 指 Kubelet 允许使用host pid命名空间的Pod源列表。
   - hostIPCSources 指 Kubelet 允许使用 host IPC 资源的 pod 源列表
   - privilegedSources 由以上三个资源配置构成
-
-4. 若设置 runonce 参数，则只拉取一次容器组配置，并在启动容器组后退出，否则将以 server 形式保持
+4. 调用createAndInitKubelet生成各类Manager组件 
+5. 若设置 runonce 参数，则只拉取一次容器组配置，并在启动容器组后退出，否则将以server形式保持
 对于runonce，首先创建所需的目录，监听 pod update 信息，得到 pod 信息后，创建pod 并返回他们的状态
-以 server 模式启动，调用startKubelet,流程如下：
-
-5. 检查 logserver 以及 apiserver 是否可用
-
-如有 cloud provider 配置， 则启动cloudResourceSyncManager，将请求发送给 cloud provider
-启动 volumeManager，VolumeManager运行一组异步循环，这些循环根据在此节点上调度的Pod来确定需要附加/装入/卸载/分离的卷。
-调用 kubelet.syncNodeStatus同步 node 状态，如果从上次同步起有任何更改 或 经过了足够的时间，它将节点状态同步到主节点，并在必要时先注册kubelet。
-调用 kubelet.updateRuntimeUp，updateRuntimeUp调用容器运行时状态回调，在容器运行时首次出现时初始化依赖于运行时的模块，如果状态检查失败，则返回错误。 如果状态检查确定，则在kubelet runtimeState中更新容器运行时正常运行时间。
-开启循环，同步 iptables 规则（但是在源码中无任何操作）
-启动一个用于“杀死pod” 的 goroutine，如果尚未使用其他goroutine，则podKiller会从通道(podKillingCh)中接收到一个pod，然后启动goroutine杀死他
-启动 statusManager 和 probeManager （都是无限循环的同步机制），statusManager 与 apiserver 同步pod状态；probeManager 管理并接收 container 探针。
-启动 runtimeClass manager （注意这里与替换底层容器相关）
-runtimeClass 是 K8s 的一个 api 对象，可以通过定义 runtimeClass 实现 K8s 对接不同的 容器运行时。
-启动 pleg （pod lifecycle event generator），用于生成 pod 相关的 event。
-至此，kubelet 整体的启动流程完毕，进入无限循环中，实时同步不同组件的状态。同时也对端口进行监听，响应 http 请求。
+6. 以server模式启动，调用startKubelet。
 
 ```diff
 // RunKubelet is responsible for setting up and running a kubelet.  It is used in three different applications:
@@ -805,7 +791,7 @@ func createAndInitKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 }
 ```
 
-- Manager组件生成
+- 生成Manager组件
 ```diff
 // NewMainKubelet instantiates a new Kubelet object along with all the required internal modules.
 // No initialization of Kubelet and its modules should happen here.
@@ -1337,6 +1323,23 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 ## Kubelet核心
 
 代码来自https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet.go
+
+流程如下：
+  - 检查 logserver 以及 apiserver 是否可用
+  - 如有 cloud provider 配置， 则启动cloudResourceSyncManager，将请求发送给 cloud provider
+  - 启动 volumeManager，VolumeManager运行一组异步循环，这些循环根据在此节点上调度的Pod来确定需要附加/装入/卸载/分离的卷。
+  - 调用 kubelet.syncNodeStatus同步 node 状态，如果从上次同步起有任何更改 或 经过了足够的时间，它将节点状态同步到主节点，并在必要时先注册kubelet。
+  - 调用 kubelet.updateRuntimeUp，updateRuntimeUp调用容器运行时状态回调，在容器运行时首次出现时初始化依赖于运行时的模块，如果状态检查失败，则返回错误。 如果状态检查确定，则在kubelet runtimeState中更新容器运行时正常运行时间。
+  - 开启循环，同步 iptables 规则（但是在源码中无任何操作）
+  - 启动一个用于“杀死pod” 的 goroutine，如果尚未使用其他goroutine，则podKiller会从通道(podKillingCh)中接收到一个pod，然后启动goroutine杀死他
+  - 启动 statusManager 和 probeManager （都是无限循环的同步机制），statusManager 与 apiserver 同步pod状态；probeManager 管理并接收 container 探针。
+  - 启动 runtimeClass manager （注意这里与替换底层容器相关）
+  - runtimeClass 是 K8s 的一个 api 对象，可以通过定义 runtimeClass 实现 K8s 对接不同的 容器运行时。
+  - 启动 pleg （pod lifecycle event generator），用于生成 pod 相关的 event。
+
+至此，kubelet整体的启动流程完毕，进入syncLoop无限循环中，实时同步不同组件的状态。同时也对端口进行监听，响应http 请求。
+
+
 ```diff
 // Run starts the kubelet reacting to config updates
 func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
