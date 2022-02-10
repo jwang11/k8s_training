@@ -584,7 +584,7 @@ RunKubelet 主要流程：
 建立并初始化 event recorder <br>
 获取以下资源(均读取自 KubeletFlags):
 
-1. hostNetworkSources 主要指Kubelet 允许 pod中的某些资源（包括 file，http，api，*） 使用 hostnetwork
+1. hostNetworkSources 主要指Kubelet允许pod中的某些资源（包括 file，http，api，*） 使用hostnetwork
 2. hostPIDSources 指 Kubelet 允许使用host pid命名空间的Pod源列表。
 3. hostIPCSources 指 Kubelet 允许使用 host IPC 资源的 pod 源列表
 4. privilegedSources 由以上三个资源配置构成
@@ -597,14 +597,10 @@ RunKubelet 主要流程：
 // Eventually, #2 will be replaced with instances of #3
 func RunKubelet(kubeServer *options.KubeletServer, kubeDeps *kubelet.Dependencies, runOnce bool) error {
 	hostname, err := nodeutil.GetHostname(kubeServer.HostnameOverride)
-	if err != nil {
-		return err
-	}
+
 	// Query the cloud provider for our node name, default to hostname if kubeDeps.Cloud == nil
 	nodeName, err := getNodeName(kubeDeps.Cloud, hostname)
-	if err != nil {
-		return err
-	}
+
 	hostnameOverridden := len(kubeServer.HostnameOverride) > 0
 	// Setup event recorder if required.
 	makeEventRecorder(kubeDeps, nodeName)
