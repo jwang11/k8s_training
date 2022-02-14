@@ -1797,6 +1797,7 @@ func newPodWorkers(
 		podCache:                           podCache,
 	}
 }
+```
 
 - Update方法
 ```diff
@@ -1965,7 +1966,7 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 		WorkType: workType,
 		Options:  options,
 	}
-
++	// pod是否已存在，如果不存在则创建channel，启动对应pod的goroutine
 	// start the pod worker goroutine if it doesn't exist
 	podUpdates, exists := p.podUpdates[uid]
 	if !exists {
@@ -1996,6 +1997,7 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 		// comment in syncPod.
 		go func() {
 			defer runtime.HandleCrash()
++			// pod处理函数			
 			p.managePodLoop(outCh)
 		}()
 	}
