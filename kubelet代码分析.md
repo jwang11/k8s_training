@@ -2158,7 +2158,18 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan podWork) {
 
 - syncPodFn
 
-建立single Pod的逻辑
+Sync Pod的逻辑
+
+1. 如果是 pod 创建事件，会记录一些 pod latency 相关的 metrics；
+2. 生成一个 v1.PodStatus 对象,Pod的状态包括这些 Pending Running Succeeded Failed Unknown
+3. PodStatus 生成之后，将发送给 Pod status manager
+4. 运行一系列 admission handlers,确保 pod 有正确的安全权限
+5. kubelet 将为这个 pod 创建 cgroups。
+6. 创建容器目录 /var/run/kubelet/pods/podid volume $poddir/volumes plugins $poddir/plugins
+7. volume manager 将 等待volumes attach 完成
+8. 从 apiserver 获取 Spec.ImagePullSecrets 中指定的 secrets，注入容器
+9. 容器运行时（runtime）创建容器
+
 ```diff
 // syncPod is the transaction script for the sync of a single pod (setting up)
 // a pod. The reverse (teardown) is handled in syncTerminatingPod and
@@ -2203,7 +2214,7 @@ func (kl *Kubelet) syncPod(ctx context.Context, updateType kubetypes.SyncPodType
 	if firstSeenTimeStr, ok := pod.Annotations[kubetypes.ConfigFirstSeenAnnotationKey]; ok {
 		firstSeenTime = kubetypes.ConvertToTimestamp(firstSeenTimeStr).Get()
 	}
-
++	//1. 如果是 pod 创建事件，会记录一些 pod latency 相关的 metrics
 	// Record pod worker start latency if being created
 	// TODO: make pod workers record their own latencies
 	if updateType == kubetypes.SyncPodCreate {
@@ -2217,7 +2228,7 @@ func (kl *Kubelet) syncPod(ctx context.Context, updateType kubetypes.SyncPodType
 				"pod", klog.KObj(pod))
 		}
 	}
-
++	//2. 生成一个 v1.PodStatus 对象
 	// Generate final API pod status with pod and status manager status
 	apiPodStatus := kl.generateAPIPodStatus(pod, podStatus)
 	// The pod IP may be changed in generateAPIPodStatus if the pod is using host network. (See #24576)
@@ -2232,6 +2243,7 @@ func (kl *Kubelet) syncPod(ctx context.Context, updateType kubetypes.SyncPodType
 		podStatus.IPs = []string{apiPodStatus.PodIP}
 	}
 
++	//4. 运行一系列 admission handlers,确保 pod 有正确的安全权限
 	// If the pod should not be running, we request the pod's containers be stopped. This is not the same
 	// as termination (we want to stop the pod, but potentially restart it later if soft admission allows
 	// it later). Set the status and phase appropriately
@@ -2264,7 +2276,7 @@ func (kl *Kubelet) syncPod(ctx context.Context, updateType kubetypes.SyncPodType
 		!firstSeenTime.IsZero() {
 		metrics.PodStartDuration.Observe(metrics.SinceInSeconds(firstSeenTime))
 	}
-
++	// PodStatus 生成之后，将发送给 Pod status manager
 	kl.statusManager.SetPodStatus(pod, apiPodStatus)
 
 	// Pods that are not runnable must be stopped - return a typed error to the pod worker
@@ -2299,7 +2311,7 @@ func (kl *Kubelet) syncPod(ctx context.Context, updateType kubetypes.SyncPodType
 			kl.configMapManager.RegisterPod(pod)
 		}
 	}
-
++	//5. kubelet 将为这个 pod 创建 cgroups
 	// Create Cgroups for the pod and apply resource parameters
 	// to them if cgroups-per-qos flag is enabled.
 	pcm := kl.containerManager.NewPodContainerManager()
@@ -2380,7 +2392,7 @@ func (kl *Kubelet) syncPod(ctx context.Context, updateType kubetypes.SyncPodType
 			}
 		}
 	}
-
++	// 创建容器目录
 	// Make data directories for the pod
 	if err := kl.makePodDataDirs(pod); err != nil {
 		kl.recorder.Eventf(pod, v1.EventTypeWarning, events.FailedToMakePodDataDirectories, "error making pod data directories: %v", err)
@@ -2388,6 +2400,7 @@ func (kl *Kubelet) syncPod(ctx context.Context, updateType kubetypes.SyncPodType
 		return err
 	}
 
++	// 等待volumes attach 完成
 	// Volume manager will not mount volumes for terminating pods
 	// TODO: once context cancellation is added this check can be removed
 	if !kl.podWorkers.IsPodTerminationRequested(pod.UID) {
@@ -2399,9 +2412,11 @@ func (kl *Kubelet) syncPod(ctx context.Context, updateType kubetypes.SyncPodType
 		}
 	}
 
++	// 从apiserver获取Spec.ImagePullSecrets中指定的secrets，注入容器。部分pod会有ImagePullSecrets,用于登录镜像库拉镜像
 	// Fetch the pull secrets for the pod
 	pullSecrets := kl.getPullSecretsForPod(pod)
 
++	// 容器运行时（runtime）创建容器
 	// Call the container runtime's SyncPod callback
 	result := kl.containerRuntime.SyncPod(pod, podStatus, pullSecrets, kl.backOff)
 	kl.reasonCache.Update(pod.UID, result)
