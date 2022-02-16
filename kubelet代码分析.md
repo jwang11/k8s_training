@@ -436,21 +436,16 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 		kubeDeps.EventClient = nil
 		kubeDeps.HeartbeatClient = nil
 		klog.InfoS("Standalone mode, no API client")
-+	// 为kubeDeps初始化 KubeClient，EventClient，HeartbeatClient模块
++	// client-go为kubeDeps初始化 KubeClient，EventClient，HeartbeatClient模块
 	case kubeDeps.KubeClient == nil, kubeDeps.EventClient == nil, kubeDeps.HeartbeatClient == nil:
 		clientConfig, closeAllConns, err := buildKubeletClientConfig(ctx, s, nodeName)
-		if err != nil {
-			return err
-		}
+
 		if closeAllConns == nil {
 			return errors.New("closeAllConns must be a valid function other than nil")
 		}
 		kubeDeps.OnHeartbeatFailure = closeAllConns
 
 		kubeDeps.KubeClient, err = clientset.NewForConfig(clientConfig)
-		if err != nil {
-			return fmt.Errorf("failed to initialize kubelet client: %w", err)
-		}
 
 		// make a separate client for events
 		eventClientConfig := *clientConfig
@@ -469,9 +464,6 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 
 		heartbeatClientConfig.QPS = float32(-1)
 		kubeDeps.HeartbeatClient, err = clientset.NewForConfig(&heartbeatClientConfig)
-		if err != nil {
-			return fmt.Errorf("failed to initialize kubelet heartbeat client: %w", err)
-		}
 	}
 
 	if kubeDeps.Auth == nil {
