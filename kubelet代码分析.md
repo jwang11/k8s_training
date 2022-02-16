@@ -269,11 +269,80 @@ HTTP server: The kubelet can also listen for HTTP and respond to a simple API
 
 	return cmd
 }
+
+// Dependencies is a bin for things we might consider "injected dependencies" -- objects constructed
+// at runtime that are necessary for running the Kubelet. This is a temporary solution for grouping
+// these objects while we figure out a more comprehensive dependency injection story for the Kubelet.
+type Dependencies struct {
+	Options []Option
+
+	// Injected Dependencies
+	Auth                 server.AuthInterface
+	CAdvisorInterface    cadvisor.Interface
+	Cloud                cloudprovider.Interface
+	ContainerManager     cm.ContainerManager
+	EventClient          v1core.EventsGetter
+	HeartbeatClient      clientset.Interface
+	OnHeartbeatFailure   func()
+	KubeClient           clientset.Interface
+	Mounter              mount.Interface
+	HostUtil             hostutil.HostUtils
+	OOMAdjuster          *oom.OOMAdjuster
+	OSInterface          kubecontainer.OSInterface
+	PodConfig            *config.PodConfig
+	ProbeManager         prober.Manager
+	Recorder             record.EventRecorder
+	Subpather            subpath.Interface
+	VolumePlugins        []volume.VolumePlugin
+	DynamicPluginProber  volume.DynamicPluginProber
+	TLSOptions           *server.TLSOptions
+	RemoteRuntimeService internalapi.RuntimeService
+	RemoteImageService   internalapi.ImageManagerService
+	// remove it after cadvisor.UsingLegacyCadvisorStats dropped.
+	useLegacyCadvisorStats bool
+}
+
+// UnsecuredDependencies returns a Dependencies suitable for being run, or an error if the server setup
+// is not valid.  It will not start any background processes, and does not include authentication/authorization
+func UnsecuredDependencies(s *options.KubeletServer, featureGate featuregate.FeatureGate) (*kubelet.Dependencies, error) {
+	// Initialize the TLS Options
+	tlsOptions, err := InitializeTLS(&s.KubeletFlags, &s.KubeletConfiguration)
+	if err != nil {
+		return nil, err
+	}
+
+	mounter := mount.New(s.ExperimentalMounterPath)
+	subpather := subpath.New(mounter)
+	hu := hostutil.NewHostUtil()
+	var pluginRunner = exec.New()
+
+	plugins, err := ProbeVolumePlugins(featureGate)
+	if err != nil {
+		return nil, err
+	}
+	return &kubelet.Dependencies{
+		Auth:                nil, // default does not enforce auth[nz]
+		CAdvisorInterface:   nil, // cadvisor.New launches background processes (bg http.ListenAndServe, and some bg cleaners), not set here
+		Cloud:               nil, // cloud provider might start background processes
+		ContainerManager:    nil,
+		KubeClient:          nil,
+		HeartbeatClient:     nil,
+		EventClient:         nil,
+		HostUtil:            hu,
+		Mounter:             mounter,
+		Subpather:           subpather,
+		OOMAdjuster:         oom.NewOOMAdjuster(),
+		OSInterface:         kubecontainer.RealOS{},
+		VolumePlugins:       plugins,
+		DynamicPluginProber: GetDynamicPluginProber(s.VolumePluginDir, pluginRunner),
+		TLSOptions:          tlsOptions}, nil
+}
+
 ```
 
 - Run kubelet
 
-代码比较长
+用KubeDeps运行KubeletServer，代码比较长
 ```diff
 // Run runs the specified KubeletServer with the given Dependencies. This should never exit.
 // The kubeDeps argument may be nil - if so, it is initialized from the settings on KubeletServer.
