@@ -5,11 +5,11 @@
 
 - kubelet 主要功能：
 
-1. pod 管理：kubelet 定期从所监听的数据源获取节点上 pod/container 的期望状态（运行什么容器、运行的副本数量、网络或者存储如何配置等等），并调用对应的容器平台接口达到这个状态。
+1. pod管理：kubelet 定期从所监听的数据源获取节点上 pod/container 的期望状态（运行什么容器、运行的副本数量、网络或者存储如何配置等等），并调用对应的容器平台接口达到这个状态。
 
 2. 容器健康检查：kubelet 创建了容器之后还要查看容器是否正常运行，如果容器运行出错，就要根据 pod 设置的重启策略进行处理。
 
-3. 容器监控：kubelet 会监控所在节点的资源使用情况，并定时向 master 报告，资源使用数据都是通过 cAdvisor 获取的。知道整个集群所有节点的资源情况，对于 pod 的调度和正常运行至关重要。
+3. 节点监控：kubelet 会监控所在节点的资源使用情况，并定时向master报告，资源使用数据都是通过cAdvisor获取的。知道整个集群所有节点的资源情况，对于调度和正常运行至关重要。
 
 
 kubelet 默认监听四个端口，分别为 10250 、10255、10248、4194。
@@ -44,11 +44,11 @@ $ curl http://127.0.0.1:10255/spec/
 ![kubelet功能模块图](kubelet_功能模块图.png)
 
 
-1. PLEG(Pod Lifecycle Event Generator） PLEG 是 kubelet 的核心模块,PLEG 会一直调用 container runtime 获取本节点 containers/sandboxes 的信息，并与自身维护的 pods cache 信息进行对比，生成对应的 PodLifecycleEvent，然后输出到 eventChannel 中，通过 eventChannel 发送到 kubelet syncLoop 进行消费，然后由 kubelet syncPod 来触发 pod 同步处理过程，最终达到用户的期望状态。
+1. PLEG(Pod Lifecycle Event Generator）PLEG 是kubelet的核心模块,PLEG 会一直调用container runtime获取本节点containers/sandboxes的信息，并与自身维护的pods cache信息进行对比，生成对应的 PodLifecycleEvent，然后输出到eventChannel中，通过eventChannel发送到kubelet syncLoop进行消费，然后由kubelet syncPod来触发pod同步处理过程，最终达到用户的期望状态。
 
-2. cAdvisor cAdvisor（https://github.com/google/cadvisor）是 google 开发的容器监控工具，集成在 kubelet 中，起到收集本节点和容器的监控信息，大部分公司对容器的监控数据都是从 cAdvisor 中获取的 ，cAvisor 模块对外提供了 interface 接口，该接口也被 imageManager，OOMWatcher，containerManager 等所使用。
+2. cAdvisor cAdvisor（https://github.com/google/cadvisor）是 google开发的容器监控工具，集成在kubelet中，起到收集本节点和容器的监控信息，大部分公司对容器的监控数据都是从 cAdvisor 中获取的 ，cAvisor 模块对外提供了 interface 接口，该接口也被 imageManager，OOMWatcher，containerManager 等所使用。
 
-3. OOMWatcher 系统 OOM 的监听器，会与 cadvisor 模块之间建立 SystemOOM,通过 Watch方式从 cadvisor 那里收到的 OOM 信号，并产生相关事件。
+3. OOMWatcher 系统 OOM 的监听器，会与 cadvisor 模块之间建立 SystemOOM,通过 Watch方式从cadvisor那里收到的OOM信号，并产生相关事件。
 
 4. probeManager probeManager 依赖于 statusManager,livenessManager,containerRefManager，会定时去监控 pod 中容器的健康状况，当前支持两种类型的探针：livenessProbe 和readinessProbe。 livenessProbe：用于判断容器是否存活，如果探测失败，kubelet 会 kill 掉该容器，并根据容器的重启策略做相应的处理。 readinessProbe：用于判断容器是否启动完成，将探测成功的容器加入到该 pod 所在 service 的 endpoints 中，反之则移除。readinessProbe 和 livenessProbe 有三种实现方式：http、tcp 以及 cmd。
 
@@ -98,7 +98,46 @@ func run(command *cobra.Command) int {
 	return 0
 }
 ```
-
+## 总体流程
+```diff
+main                                                                            // cmd/kubelet/kubelet.go
+ |-NewKubeletCommand                                                            // cmd/kubelet/app/server.go
+   |-Run                                                                        // cmd/kubelet/app/server.go
+      |-initForOS                                                               // cmd/kubelet/app/server.go
+      |-run                                                                     // cmd/kubelet/app/server.go
+        |-initConfigz                                                           // cmd/kubelet/app/server.go
+        |-InitCloudProvider
+        |-NewContainerManager
+        |-ApplyOOMScoreAdj
+        |-PreInitRuntimeService
+        |-RunKubelet                                                            // cmd/kubelet/app/server.go
+        | |-k = createAndInitKubelet                                            // cmd/kubelet/app/server.go
+        | |  |-NewMainKubelet
+        | |  |  |-watch k8s Service
+        | |  |  |-watch k8s Node
+        | |  |  |-klet := &Kubelet{}
+        | |  |  |-init klet fields
+        | |  |
+        | |  |-k.BirthCry()
+        | |  |-k.StartGarbageCollection()
+        | |
+        | |-startKubelet(k)                                                     // cmd/kubelet/app/server.go
+        |    |-go k.Run()                                                       // -> pkg/kubelet/kubelet.go
+        |    |  |-go cloudResourceSyncManager.Run()
+        |    |  |-initializeModules
+        |    |  |-go volumeManager.Run()
+        |    |  |-go nodeLeaseController.Run()
+        |    |  |-initNetworkUtil() // setup iptables
+        |    |  |-go Until(PerformPodKillingWork, 1*time.Second, neverStop)
+        |    |  |-statusManager.Start()
+        |    |  |-runtimeClassManager.Start
+        |    |  |-pleg.Start()
+        |    |  |-syncLoop(updates, kl)                                         // pkg/kubelet/kubelet.go
+        |    |
+        |    |-k.ListenAndServe
+        |
+        |-go http.ListenAndServe(healthz)
+```
 ## kubelet启动
 ![kubelet启动流程](kubelet启动.png)
 ```diff
