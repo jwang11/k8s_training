@@ -102,17 +102,19 @@ func run(command *cobra.Command) int {
 ```diff
 main                                                                            // cmd/kubelet/kubelet.go
  |-NewKubeletCommand                                                            // cmd/kubelet/app/server.go
+   |-kubeletServer = &options.KubeletServer
+   |-kubeletDeps = UnsecuredDependencies(kubeletServer, utilfeature.DefaultFeatureGate)
    |-Run                                                                        // cmd/kubelet/app/server.go
-      |-initForOS                                                               // cmd/kubelet/app/server.go
-      |-run                                                                     // cmd/kubelet/app/server.go
-        |-initConfigz                                                           // cmd/kubelet/app/server.go
+      |-initForOS                                                               
+      |-run                                                                     
+        |-initConfigz                                                           
         |-InitCloudProvider
         |-NewContainerManager
         |-ApplyOOMScoreAdj
         |-PreInitRuntimeService
         |-RunKubelet                                                            // cmd/kubelet/app/server.go
         | |-k = createAndInitKubelet                                            // cmd/kubelet/app/server.go
-        | |  |-NewMainKubelet
+        | |  |-NewMainKubelet                                                   // cmd/kubelet/app/server.go
         | |  |  |-watch k8s Service
         | |  |  |-watch k8s Node
         | |  |  |-klet := &Kubelet{}
