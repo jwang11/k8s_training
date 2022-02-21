@@ -347,9 +347,6 @@ type Dependencies struct {
 func UnsecuredDependencies(s *options.KubeletServer, featureGate featuregate.FeatureGate) (*kubelet.Dependencies, error) {
 	// Initialize the TLS Options
 	tlsOptions, err := InitializeTLS(&s.KubeletFlags, &s.KubeletConfiguration)
-	if err != nil {
-		return nil, err
-	}
 
 	mounter := mount.New(s.ExperimentalMounterPath)
 	subpather := subpath.New(mounter)
@@ -357,9 +354,7 @@ func UnsecuredDependencies(s *options.KubeletServer, featureGate featuregate.Fea
 	var pluginRunner = exec.New()
 
 	plugins, err := ProbeVolumePlugins(featureGate)
-	if err != nil {
-		return nil, err
-	}
+
 	return &kubelet.Dependencies{
 		Auth:                nil, // default does not enforce auth[nz]
 		CAdvisorInterface:   nil, // cadvisor.New launches background processes (bg http.ListenAndServe, and some bg cleaners), not set here
@@ -377,7 +372,6 @@ func UnsecuredDependencies(s *options.KubeletServer, featureGate featuregate.Fea
 		DynamicPluginProber: GetDynamicPluginProber(s.VolumePluginDir, pluginRunner),
 		TLSOptions:          tlsOptions}, nil
 }
-
 ```
 
 - Run kubelet
@@ -407,9 +401,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 	err = utilfeature.DefaultMutableFeatureGate.SetFromMap(s.KubeletConfiguration.FeatureGates)
 
 	// validate the initial KubeletServer (we set feature gates first, because this validation depends on feature gates)
-	if err := options.ValidateKubeletServer(s); err != nil {
-		return err
-	}
+	options.ValidateKubeletServer(s
 
 	// Warn if MemoryQoS enabled with cgroups v1
 	if utilfeature.DefaultFeatureGate.Enabled(features.MemoryQoS) &&
@@ -428,9 +420,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 		}
 		if s.ExitOnLockContention {
 			klog.InfoS("Watching for inotify events", "path", s.LockFilePath)
-			if err := watchForLockfileContention(s.LockFilePath, done); err != nil {
-				return err
-			}
+			watchForLockfileContention(s.LockFilePath, done)
 		}
 	}
 
