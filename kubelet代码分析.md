@@ -111,10 +111,10 @@ main                                                                            
         |-InitCloudProvider
         |-NewContainerManager
         |-ApplyOOMScoreAdj
-        |-PreInitRuntimeService
+        |-PreInitRuntimeService                                                 // pkg/kubelet/kubelet.go
         |-RunKubelet                                                            // cmd/kubelet/app/server.go
         | |-k = createAndInitKubelet                                            // cmd/kubelet/app/server.go
-        | |  |-NewMainKubelet                                                   // cmd/kubelet/app/server.go
+        | |  |-NewMainKubelet                                                   // pkg/kubelet/kubelet.go
         | |  |  |-watch k8s Service
         | |  |  |-watch k8s Node
         | |  |  |-klet := &Kubelet{}
@@ -124,7 +124,7 @@ main                                                                            
         | |  |-k.StartGarbageCollection()
         | |
         | |-startKubelet(k)                                                     // cmd/kubelet/app/server.go
-        |    |-go k.Run()                                                       // -> pkg/kubelet/kubelet.go
+        |    |-go k.Run()                                                       // pkg/kubelet/kubelet.go
         |    |  |-go cloudResourceSyncManager.Run()
         |    |  |-initializeModules
         |    |  |-go volumeManager.Run()
