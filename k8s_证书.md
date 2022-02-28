@@ -127,7 +127,7 @@ kubeadm部署的etcd服务是以pod方式运行, 在该pod的定义中, 配置�
 ## Serveice Account秘钥
 这组”证书”其实不是证书, 而是一组秘钥。这组秘钥对儿其实跟我们在Linux上创建, 用于免密登录的密钥对儿原理是一样的
 
-> 这组的密钥对儿仅提供给kube-controller-manager使用。 kube-controller-manager通过sa.key对token进行签名, master节点通过公钥sa.pub进行签名的验证
+> 这组的密钥对儿仅提供给kube-controller-manager使用。 kube-controller-manager通过sa.key对token进行签名, master节点通过公钥sa.pub进行验证
 
 /etc/kubernetes/pki/sa.key
 /etc/kubernetes/pki/sa.pub
