@@ -77,16 +77,50 @@ API Aggregation允许在不修改Kubernetes核心代码的同时扩展Kubernetes
 --proxy-client-key-file=<path to aggregator proxy key>
 ```
 
-- kube-apiserver 代理根证书(客户端证书)
+- kube-apiserver代理根证书(客户端证书)
 
 用在requestheader-client-ca-file配置选项中, kube-apiserver使用该证书来验证客户端证书是否为自己所签发
 /etc/kubernetes/pki/front-proxy-ca.crt
 /etc/kubernetes/pki/front-proxy-ca.key
 
-由此根证书签发的证书只有一组:
+由此根证书签发的证书只有一组: 代理层(如汇聚层aggregator)使用此代理证书来向 kube-apiserver 请求认证
 
-代理层(如汇聚层aggregator)使用此套代理证书来向 kube-apiserver 请求认证
-
-代理端使用的客户端证书, 用作代用户与 kube-apiserver 认证
+代理端使用的客户端证书, 用作代理用户与kube-apiserver认证
 /etc/kubernetes/pki/front-proxy-client.crt
 /etc/kubernetes/pki/front-proxy-client.key
+
+
+## etcd集群根证书
+
+etcd集群所用到的证书都保存在/etc/kubernetes/pki/etcd这路径下, 很明显, 这一套证书是用来专门给etcd集群服务使用的, 设计以下证书文件
+
+etcd集群根证书CA(etcd 所用到的所有证书的签发机构)
+
+/etc/kubernetes/pki/etcd/ca.crt
+/etc/kubernetes/pki/etcd/ca.key
+由此根证书签发机构签发的证书有:
+
+- etcd server持有的服务端证书
+
+/etc/kubernetes/pki/etcd/server.crt
+/etc/kubernetes/pki/etcd/server.key
+
+- peer集群中节点互相通信使用的客户端证书
+
+/etc/kubernetes/pki/etcd/peer.crt
+/etc/kubernetes/pki/etcd/peer.key
+
+注: Peer：对同一个etcd集群中另外一个Member的称呼
+
+- pod中定义 Liveness 探针使用的客户端证书
+
+kubeadm部署的etcd服务是以pod方式运行, 在该pod的定义中, 配置了Liveness探活探针
+
+/etc/kubernetes/pki/etcd/healthcheck-client.crt
+/etc/kubernetes/pki/etcd/healthcheck-client.key
+
+- 配置在kube-apiserver中用来与etcd server做双向认证的客户端证书
+
+/etc/kubernetes/pki/apiserver-etcd-client.crt
+/etc/kubernetes/pki/apiserver-etcd-client.key
+
