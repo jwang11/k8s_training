@@ -54,3 +54,11 @@ Kubernetes把证书放在了两个文件夹中，共22个文件
 /etc/kubernetes/pki/apiserver-kubelet-client.crt
 /etc/kubernetes/pki/apiserver-kubelet-client.key
 
+注意: Kubernetes集群组件之间的交互是双向的, kubelet既需要主动访问kube-apiserver, kube-apiserver也需要主动向 kubelet发起请求, 
+所以双方都需要有自己的根证书以及使用该根证书签发的服务端证书和客户端证书。
+
+在kube-apiserver中, 一般明确指定用于https访问的服务端证书和带有CN用户名信息的客户端证书，而在kubelet的启动配置中, 一般只指定了ca根证书, 
+而没有明确指定用于https访问的服务端证书, 这是因为在生成服务端证书时, 一般会指定服务端地址或主机名, kube-apiserver相对变化不是很频繁, 所以在创建
+集群之初就可以预先分配好用作kube-apiserver的IP或主机名/域名, 但是由于部署在node节点上的kubelet会因为集群规模的变化而频繁变化, 而无法预知node
+的所有IP信息, 所以kubelet上一般不会明确指定服务端证书, 而是只指定ca根证书, 让kubelet根据本地主机信息自动生成服务端证书并保存到配置的cert-dir文件夹中。
+
