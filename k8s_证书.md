@@ -62,3 +62,31 @@ Kubernetes把证书放在了两个文件夹中，共22个文件
 集群之初就可以预先分配好用作kube-apiserver的IP或主机名/域名, 但是由于部署在node节点上的kubelet会因为集群规模的变化而频繁变化, 而无法预知node
 的所有IP信息, 所以kubelet上一般不会明确指定服务端证书, 而是只指定ca根证书, 让kubelet根据本地主机信息自动生成服务端证书并保存到配置的cert-dir文件夹中。
 
+## 汇聚层证书
+kube-apiserver的另一种访问方式就是使用kubectl proxy来代理访问, 而该证书就是用来支持SSL代理访问的。在该种访问模式下，用户是以http的方式发起请求到代理服务, 
+代理服务会将该请求转发送给kube-apiserver。转发时, 代理会将请求头里加入证书信息, 以下两个配置
+
+API Aggregation允许在不修改Kubernetes核心代码的同时扩展Kubernetes API. 开启 API Aggregation 需要在 kube-apiserver 中添加如下配置:
+```diff
+--requestheader-client-ca-file=<path to aggregator CA cert>
+--requestheader-allowed-names=front-proxy-client
+--requestheader-extra-headers-prefix=X-Remote-Extra-
+--requestheader-group-headers=X-Remote-Group
+--requestheader-username-headers=X-Remote-User
+--proxy-client-cert-file=<path to aggregator proxy cert>
+--proxy-client-key-file=<path to aggregator proxy key>
+```
+
+- kube-apiserver 代理根证书(客户端证书)
+
+用在requestheader-client-ca-file配置选项中, kube-apiserver使用该证书来验证客户端证书是否为自己所签发
+/etc/kubernetes/pki/front-proxy-ca.crt
+/etc/kubernetes/pki/front-proxy-ca.key
+
+由此根证书签发的证书只有一组:
+
+代理层(如汇聚层aggregator)使用此套代理证书来向 kube-apiserver 请求认证
+
+代理端使用的客户端证书, 用作代用户与 kube-apiserver 认证
+/etc/kubernetes/pki/front-proxy-client.crt
+/etc/kubernetes/pki/front-proxy-client.key
