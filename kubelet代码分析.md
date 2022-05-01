@@ -1182,6 +1182,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	klet.reasonCache = NewReasonCache()
 	klet.workQueue = queue.NewBasicWorkQueue(klet.clock)
 	klet.podWorkers = newPodWorkers(
++		// syncPod是最重要的Pod处理逻辑	
 		klet.syncPod,
 		klet.syncTerminatingPod,
 		klet.syncTerminatedPod,
