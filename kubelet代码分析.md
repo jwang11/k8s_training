@@ -2712,12 +2712,6 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, podStatus *kubecontaine
 	configPodSandboxResult := kubecontainer.NewSyncResult(kubecontainer.ConfigPodSandbox, podSandboxID)
 	result.AddSyncResult(configPodSandboxResult)
 	podSandboxConfig, err := m.generatePodSandboxConfig(pod, podContainerChanges.Attempt)
-	if err != nil {
-		message := fmt.Sprintf("GeneratePodSandboxConfig for pod %q failed: %v", format.Pod(pod), err)
-		klog.ErrorS(err, "GeneratePodSandboxConfig for pod failed", "pod", klog.KObj(pod))
-		configPodSandboxResult.Fail(kubecontainer.ErrConfigPodSandbox, message)
-		return
-	}
 
 	// Helper containing boilerplate common to starting all types of containers.
 	// typeName is a description used to describe this type of container in log messages,
@@ -2838,7 +2832,7 @@ func (m *kubeGenericRuntimeManager) createPodSandbox(pod *v1.Pod, attempt uint32
 }
 ```
 
-- 文件cri/remote/remote_runtime.go
+- 文件pkg/kubelet/cri/remote/remote_runtime.go
 ```diff
 // RunPodSandbox creates and starts a pod-level sandbox. Runtimes should ensure
 // the sandbox is in ready state.
@@ -3024,4 +3018,58 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 
 	return "", nil
 }
+```
+- 文件pkg/kubelet/cri/remote/remote_runtime.go
+```diff
+// CreateContainer creates a new container in the specified PodSandbox.
+func (r *remoteRuntimeService) CreateContainer(podSandBoxID string, config *runtimeapi.ContainerConfig, sandboxConfig *runtimeapi.PodSandboxConfig) (string, error) {
+	klog.V(10).InfoS("[RemoteRuntimeService] CreateContainer", "podSandboxID", podSandBoxID, "timeout", r.timeout)
+	ctx, cancel := getContextWithTimeout(r.timeout)
+	defer cancel()
+
+	if r.useV1API() {
++		// gRPC调用V1 版本 createContainer	
+		return r.createContainerV1(ctx, podSandBoxID, config, sandboxConfig)
+	}
+
+	return r.createContainerV1alpha2(ctx, podSandBoxID, config, sandboxConfig)
+}
+
+func (r *remoteRuntimeService) createContainerV1(ctx context.Context, podSandBoxID string, config *runtimeapi.ContainerConfig, sandboxConfig *runtimeapi.PodSandboxConfig) (string, error) {
++	// 真正的gRPC调用
+	resp, err := r.runtimeClient.CreateContainer(ctx, &runtimeapi.CreateContainerRequest{
+		PodSandboxId:  podSandBoxID,
+		Config:        config,
+		SandboxConfig: sandboxConfig,
+	})
+
+	klog.V(10).InfoS("[RemoteRuntimeService] CreateContainer", "podSandboxID", podSandBoxID, "containerID", resp.ContainerId)
+	return resp.ContainerId, nil
+}
+
+// StartContainer starts the container.
+func (r *remoteRuntimeService) StartContainer(containerID string) (err error) {
+	klog.V(10).InfoS("[RemoteRuntimeService] StartContainer", "containerID", containerID, "timeout", r.timeout)
+	ctx, cancel := getContextWithTimeout(r.timeout)
+	defer cancel()
+
+	if r.useV1API() {
+		_, err = r.runtimeClient.StartContainer(ctx, &runtimeapi.StartContainerRequest{
+			ContainerId: containerID,
+		})
+	} else {
+		_, err = r.runtimeClientV1alpha2.StartContainer(ctx, &runtimeapiV1alpha2.StartContainerRequest{
+			ContainerId: containerID,
+		})
+	}
+
+	if err != nil {
+		klog.ErrorS(err, "StartContainer from runtime service failed", "containerID", containerID)
+		return err
+	}
+	klog.V(10).InfoS("[RemoteRuntimeService] StartContainer Response", "containerID", containerID)
+
+	return nil
+}
+
 ```
