@@ -2653,7 +2653,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, podStatus *kubecontaine
 		// we need to convert the sysctl variable, the dot is used as a separator to separate the kernel namespace.
 		// When runc supports slash as sysctl separator, this function can no longer be used.
 		sysctl.ConvertPodSysctlsVariableToDotsSeparator(pod.Spec.SecurityContext)
-
++		// 通过CRI runtime创建pod sandbox，包括设置Pause container
 		podSandboxID, msg, err = m.createPodSandbox(pod, podContainerChanges.Attempt)
 		if err != nil {
 			// createPodSandbox can return an error from CNI, CSI,
@@ -2740,6 +2740,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, podStatus *kubecontaine
 			metrics.StartedHostProcessContainersTotal.WithLabelValues(metricLabel).Inc()
 		}
 		klog.V(4).InfoS("Creating container in pod", "containerType", typeName, "container", spec.container, "pod", klog.KObj(pod))
++		// 通过CRI runtime启动目标container		
 		// NOTE (aramase) podIPs are populated for single stack and dual stack clusters. Send only podIPs.
 		if msg, err := m.startContainer(podSandboxID, podSandboxConfig, spec, pod, podStatus, pullSecrets, podIP, podIPs); err != nil {
 			// startContainer() returns well-defined error codes that have reasonable cardinality for metrics and are
@@ -2786,7 +2787,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, podStatus *kubecontaine
 
 	// Step 7: start containers in podContainerChanges.ContainersToStart.
 	for _, idx := range podContainerChanges.ContainersToStart {
-+		// 调用内嵌start函数，最后会执行m.startContainer	
++		// 调用内嵌start函数，最后会执行m.startContainer
 		start("container", metrics.Container, containerStartSpec(&pod.Spec.Containers[idx]))
 	}
 
@@ -2794,6 +2795,102 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, podStatus *kubecontaine
 }
 ```
 
+## Create pod Sandbox
+```diff
+// createPodSandbox creates a pod sandbox and returns (podSandBoxID, message, error).
+func (m *kubeGenericRuntimeManager) createPodSandbox(pod *v1.Pod, attempt uint32) (string, string, error) {
+	podSandboxConfig, err := m.generatePodSandboxConfig(pod, attempt)
+	if err != nil {
+		message := fmt.Sprintf("Failed to generate sandbox config for pod %q: %v", format.Pod(pod), err)
+		klog.ErrorS(err, "Failed to generate sandbox config for pod", "pod", klog.KObj(pod))
+		return "", message, err
+	}
+
+	// Create pod logs directory
+	err = m.osInterface.MkdirAll(podSandboxConfig.LogDirectory, 0755)
+	if err != nil {
+		message := fmt.Sprintf("Failed to create log directory for pod %q: %v", format.Pod(pod), err)
+		klog.ErrorS(err, "Failed to create log directory for pod", "pod", klog.KObj(pod))
+		return "", message, err
+	}
+
+	runtimeHandler := ""
+	if m.runtimeClassManager != nil {
+		runtimeHandler, err = m.runtimeClassManager.LookupRuntimeHandler(pod.Spec.RuntimeClassName)
+		if err != nil {
+			message := fmt.Sprintf("Failed to create sandbox for pod %q: %v", format.Pod(pod), err)
+			return "", message, err
+		}
+		if runtimeHandler != "" {
+			klog.V(2).InfoS("Running pod with runtime handler", "pod", klog.KObj(pod), "runtimeHandler", runtimeHandler)
+		}
+	}
+
++	// gRPC调用CRI server的RunPodSandbox
+	podSandBoxID, err := m.runtimeService.RunPodSandbox(podSandboxConfig, runtimeHandler)
+	if err != nil {
+		message := fmt.Sprintf("Failed to create sandbox for pod %q: %v", format.Pod(pod), err)
+		klog.ErrorS(err, "Failed to create sandbox for pod", "pod", klog.KObj(pod))
+		return "", message, err
+	}
+
+	return podSandBoxID, "", nil
+}
+```
+
+- 文件cri/remote/remote_runtime.go
+```diff
+// RunPodSandbox creates and starts a pod-level sandbox. Runtimes should ensure
+// the sandbox is in ready state.
+func (r *remoteRuntimeService) RunPodSandbox(config *runtimeapi.PodSandboxConfig, runtimeHandler string) (string, error) {
+	// Use 2 times longer timeout for sandbox operation (4 mins by default)
+	// TODO: Make the pod sandbox timeout configurable.
+	timeout := r.timeout * 2
+
+	klog.V(10).InfoS("[RemoteRuntimeService] RunPodSandbox", "config", config, "runtimeHandler", runtimeHandler, "timeout", timeout)
+
+	ctx, cancel := getContextWithTimeout(timeout)
+	defer cancel()
+
+	var podSandboxID string
+	if r.useV1API() {
++		// V1版本gRPC调用	
+		resp, err := r.runtimeClient.RunPodSandbox(ctx, &runtimeapi.RunPodSandboxRequest{
+			Config:         config,
+			RuntimeHandler: runtimeHandler,
+		})
+
+		if err != nil {
+			klog.ErrorS(err, "RunPodSandbox from runtime service failed")
+			return "", err
+		}
+		podSandboxID = resp.PodSandboxId
+	} else {
++		// V1alpha2版本gRPC调用	
+		resp, err := r.runtimeClientV1alpha2.RunPodSandbox(ctx, &runtimeapiV1alpha2.RunPodSandboxRequest{
+			Config:         v1alpha2PodSandboxConfig(config),
+			RuntimeHandler: runtimeHandler,
+		})
+
+		if err != nil {
+			klog.ErrorS(err, "RunPodSandbox from runtime service failed")
+			return "", err
+		}
+		podSandboxID = resp.PodSandboxId
+	}
+
+	if podSandboxID == "" {
+		errorMessage := fmt.Sprintf("PodSandboxId is not set for sandbox %q", config.Metadata)
+		err := errors.New(errorMessage)
+		klog.ErrorS(err, "RunPodSandbox failed")
+		return "", err
+	}
+
+	klog.V(10).InfoS("[RemoteRuntimeService] RunPodSandbox Response", "podSandboxID", podSandboxID)
+
+	return podSandboxID, nil
+}
+```
 ## start Container
 
 ```diff
@@ -2862,6 +2959,7 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 		return s.Message(), ErrPreCreateHook
 	}
 
++	// gRPC 调用CRI server的CreateContainer
 	containerID, err := m.runtimeService.CreateContainer(podSandboxID, containerConfig, podSandboxConfig)
 	if err != nil {
 		s, _ := grpcstatus.FromError(err)
@@ -2876,6 +2974,7 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 	}
 	m.recordContainerEvent(pod, container, containerID, v1.EventTypeNormal, events.CreatedContainer, fmt.Sprintf("Created container %s", container.Name))
 
++	// gRPC 调用CRI server的StartContainer
 	// Step 3: start the container.
 	err = m.runtimeService.StartContainer(containerID)
 	if err != nil {
