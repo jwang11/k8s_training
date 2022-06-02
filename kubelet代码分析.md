@@ -1555,6 +1555,7 @@ func (kl *Kubelet) syncLoop(updates <-chan kubetypes.PodUpdate, handler SyncHand
 		duration = base
 
 		kl.syncLoopMonitor.Store(kl.clock.Now())
++		// 进入syncLoopIteration		
 		if !kl.syncLoopIteration(updates, handler, syncTicker.C, housekeepingTicker.C, plegCh) {
 			break
 		}
@@ -1608,6 +1609,7 @@ func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handle
 		switch u.Op {
 		case kubetypes.ADD:
 			klog.V(2).InfoS("SyncLoop ADD", "source", u.Source, "pods", klog.KObjs(u.Pods))
++			// Add Pod的逻辑处理			
 			// After restarting, kubelet will get all existing pods through
 			// ADD as if they are new pods. These pods will then go through the
 			// admission process and *may* be rejected. This can be resolved
@@ -1748,6 +1750,7 @@ func (kl *Kubelet) HandlePodAdditions(pods []*v1.Pod) {
 			}
 		}
 		mirrorPod, _ := kl.podManager.GetMirrorPodByPod(pod)
++		// 进入dispatchWork	
 		kl.dispatchWork(pod, kubetypes.SyncPodCreate, mirrorPod, start)
 		// TODO: move inside syncPod and make reentrant
 		// https://github.com/kubernetes/kubernetes/issues/105014
@@ -1758,7 +1761,7 @@ func (kl *Kubelet) HandlePodAdditions(pods []*v1.Pod) {
 // dispatchWork starts the asynchronous sync of the pod in a pod worker.
 // If the pod has completed termination, dispatchWork will perform no action.
 func (kl *Kubelet) dispatchWork(pod *v1.Pod, syncType kubetypes.SyncPodType, mirrorPod *v1.Pod, start time.Time) {
-+	// UpdatePod改变pod状态
++	// UpdatePod改变pod状态，引入Podworker
 	// Run the sync in an async worker.
 	kl.podWorkers.UpdatePod(UpdatePodOptions{
 		Pod:        pod,
@@ -1773,7 +1776,7 @@ func (kl *Kubelet) dispatchWork(pod *v1.Pod, syncType kubetypes.SyncPodType, mir
 }
 ```
 
-### PodWorker
+## PodWorker
 ```diff
 // podWorkers keeps track of operations on pods and ensures each pod is
 // reconciled with the container runtime and other subsystems. The worker
@@ -2110,7 +2113,7 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 		// comment in syncPod.
 		go func() {
 			defer runtime.HandleCrash()
-+			// pod处理函数			
++			// 进入podworker的managerPodLoop			
 			p.managePodLoop(outCh)
 		}()
 	}
@@ -2143,9 +2146,9 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 }
 ```
 
-### PodWorker
+- PodWorker对Pod处理的逻辑
 
-Pod处理的逻辑，代码来自https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/pod_workers.go
+代码来自https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/pod_workers.go
 ```diff
 func (p *podWorkers) managePodLoop(podUpdates <-chan podWork) {
 	var lastSyncTime time.Time
@@ -2269,7 +2272,7 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan podWork) {
 }
 ```
 
-- syncPodFn
+-  p.syncPodFn也就是Kubelet->syncPod
 
 Sync Pod的逻辑
 
