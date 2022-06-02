@@ -679,14 +679,15 @@ RunKubelet 主要流程：
   - hostPIDSources 指 Kubelet 允许使用host pid命名空间的Pod源列表。
   - hostIPCSources 指 Kubelet 允许使用 host IPC 资源的 pod 源列表
   - privilegedSources 由以上三个资源配置构成
-4. 调用createAndInitKubelet生成各类Manager组件 
+4. 调用createAndInitKubelet生成kublet结构，它包含了各类Manager组件 
 5. 若设置 runonce 参数，则只拉取一次容器组配置，并在启动容器组后退出，否则将以server形式保持
 对于runonce，首先创建所需的目录，监听 pod update 信息，得到 pod 信息后，创建pod 并返回他们的状态
 6. 以server模式启动，调用startKubelet。
 
-```diff
 
-主要包含两步，createAndInitKubelet和
+其中，createAndInitKubelet和startKubelet是最重要的两步
+
+```diff
 // RunKubelet is responsible for setting up and running a kubelet.  It is used in three different applications:
 //   1 Integration tests
 //   2 Kubelet binary
@@ -886,7 +887,8 @@ func startKubelet(k kubelet.Bootstrap, podCfg *config.PodConfig, kubeCfg *kubele
 }
 ```
 
-- 生成Manager组件
+## 创建Kubelet
+- RunKubelet -> createAndInitKubelet -> NewMainKubelet 生成Kubelet及相应Manager组件
 ```diff
 // NewMainKubelet instantiates a new Kubelet object along with all the required internal modules.
 // No initialization of Kubelet and its modules should happen here.
@@ -1055,6 +1057,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	}
 	httpClient := &http.Client{}
 
++	// Kubelet结构
 	klet := &Kubelet{
 		hostname:                                hostname,
 		hostnameOverridden:                      hostnameOverridden,
@@ -1186,7 +1189,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	klet.reasonCache = NewReasonCache()
 	klet.workQueue = queue.NewBasicWorkQueue(klet.clock)
 	klet.podWorkers = newPodWorkers(
-+		// syncPod是最重要的Pod处理逻辑	
++		// syncPod是最重要的Pod处理逻辑，syncLoop里会用到
 		klet.syncPod,
 		klet.syncTerminatingPod,
 		klet.syncTerminatedPod,
@@ -1414,7 +1417,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 }
 ```
 
-## Kubelet核心
+## 运行Kubelet
+RunKubelet -> startKubelet -> k.Run
 
 代码来自https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet.go
 
@@ -1432,7 +1436,6 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
   - 启动 pleg （pod lifecycle event generator），用于生成 pod 相关的 event。
 
 至此，kubelet整体的启动流程完毕，进入syncLoop无限循环中，实时同步不同组件的状态。同时也对端口进行监听，响应http 请求。
-
 
 ```diff
 // Run starts the kubelet reacting to config updates
@@ -1485,7 +1488,8 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 
 	// Start the pod lifecycle event generator.
 	kl.pleg.Start()
-	
+
++	// 著名的syncLoop循环
 	kl.syncLoop(updates, kl)
 }
 ```
