@@ -1230,7 +1230,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		kubeDeps.ContainerManager.GetNodeAllocatableAbsolute,
 		*kubeCfg.MemoryThrottlingFactor,
 	)
-
++	// 设置GenericRuntimeManager是default的kubelet Container Runtime
 	klet.containerRuntime = runtime
 	klet.streamingRuntime = runtime
 	klet.runner = runtime
@@ -2146,7 +2146,7 @@ func (p *podWorkers) UpdatePod(options UpdatePodOptions) {
 }
 ```
 
-- PodWorker对Pod处理的逻辑
+- PodWorker对Pod Update的处理逻辑managePodLoop
 
 代码来自https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/pod_workers.go
 ```diff
@@ -2553,7 +2553,7 @@ func (kl *Kubelet) syncPod(ctx context.Context, updateType kubetypes.SyncPodType
 }
 ```
 
-- （kubeGenericRuntimeManager.SyncPod）
+- kl.containerRuntime.SyncPod（kubeGenericRuntimeManager.SyncPod）处理Pod
 
 1. 计算sandbox和container变化
 2. 如果sandbox变更了就要把pod kill了
