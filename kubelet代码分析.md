@@ -2272,7 +2272,7 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan podWork) {
 }
 ```
 
--  p.syncPodFn也就是Kubelet->syncPod
+-  p.syncPodFn(Kubelet->syncPod)
 
 Sync Pod的逻辑
 
