@@ -374,9 +374,8 @@ func UnsecuredDependencies(s *options.KubeletServer, featureGate featuregate.Fea
 }
 ```
 
-- Run kubelet
+- 用构建的KubeDeps运行KubeletServer
 
-用KubeDeps运行KubeletServer，代码比较长
 ```diff
 // Run runs the specified KubeletServer with the given Dependencies. This should never exit.
 // The kubeDeps argument may be nil - if so, it is initialized from the settings on KubeletServer.
@@ -668,7 +667,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 }
 ```
 
-- RunKubelet
+- Run -> run -> RunKubelet
 
 RunKubelet 主要流程：
 
@@ -997,9 +996,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		enforceNodeAllocatable = []string{}
 	}
 	thresholds, err := eviction.ParseThresholdConfig(enforceNodeAllocatable, kubeCfg.EvictionHard, kubeCfg.EvictionSoft, kubeCfg.EvictionSoftGracePeriod, kubeCfg.EvictionMinimumReclaim)
-	if err != nil {
-		return nil, err
-	}
+
 	evictionConfig := eviction.Config{
 		PressureTransitionPeriod: kubeCfg.EvictionPressureTransitionPeriod.Duration,
 		MaxPodGracePeriodSeconds: int64(kubeCfg.EvictionMaxPodGracePeriod),
