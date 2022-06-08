@@ -140,7 +140,7 @@ main                                                                            
         |
         |-go http.ListenAndServe(healthz)
 ```
-## kubelet启动
+## kubelet启动命令
 ```diff
 // NewKubeletCommand creates a *cobra.Command object with default parameters
 func NewKubeletCommand() *cobra.Command {
@@ -794,7 +794,6 @@ func RunKubelet(kubeServer *options.KubeletServer, kubeDeps *kubelet.Dependencie
 	return nil
 }
 
-
 func createAndInitKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	kubeDeps *kubelet.Dependencies,
 	crOptions *config.ContainerRuntimeOptions,
@@ -887,7 +886,7 @@ func startKubelet(k kubelet.Bootstrap, podCfg *config.PodConfig, kubeCfg *kubele
 ```
 
 ## 创建Kubelet
-- RunKubelet -> createAndInitKubelet -> NewMainKubelet 生成Kubelet及相应Manager组件
+- RunKubelet -> createAndInitKubelet -> NewMainKubelet生成Kubelet及相应Manager组件
 ```diff
 // NewMainKubelet instantiates a new Kubelet object along with all the required internal modules.
 // No initialization of Kubelet and its modules should happen here.
