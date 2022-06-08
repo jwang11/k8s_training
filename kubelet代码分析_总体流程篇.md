@@ -141,6 +141,8 @@ main                                                                            
         |-go http.ListenAndServe(healthz)
 ```
 ## kubelet启动命令
+
+`cmd/kubelet/app/server.go`
 ```diff
 // NewKubeletCommand creates a *cobra.Command object with default parameters
 func NewKubeletCommand() *cobra.Command {
