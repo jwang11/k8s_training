@@ -74,7 +74,7 @@ $ curl http://127.0.0.1:10255/spec/
 
 ## 代码入口
 
-Kubelet 的主函数入口在 `cmd/kubelet/kubelet.go`中
+Kubelet 的主函数入口在 [`cmd/kubelet/kubelet.go`](https://github.com/kubernetes/kubernetes/blob/master/cmd/kubelet/kubelet.go)中
 ```diff
 func main() {
 	command := app.NewKubeletCommand()
