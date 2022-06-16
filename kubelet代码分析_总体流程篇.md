@@ -378,6 +378,7 @@ func UnsecuredDependencies(s *options.KubeletServer, featureGate featuregate.Fea
 
 - 用构建的KubeDeps运行KubeletServer
 
+代码在[`cmd/kubelet/app/server.go`](https://github.com/kubernetes/kubernetes/blob/master/cmd/kubelet/app/server.go)
 ```diff
 // Run runs the specified KubeletServer with the given Dependencies. This should never exit.
 // The kubeDeps argument may be nil - if so, it is initialized from the settings on KubeletServer.
