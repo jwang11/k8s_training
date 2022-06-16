@@ -142,7 +142,7 @@ main                                                                            
 ```
 ## kubelet启动命令
 
-代码在[`cmd/kubelet/app/server.go`](https://github.com/kubernetes/kubernetes/blob/master/cmd/kubelet/app/server.go]
+代码在[`cmd/kubelet/app/server.go`](https://github.com/kubernetes/kubernetes/blob/master/cmd/kubelet/app/server.go)
 ```diff
 // NewKubeletCommand creates a *cobra.Command object with default parameters
 func NewKubeletCommand() *cobra.Command {
