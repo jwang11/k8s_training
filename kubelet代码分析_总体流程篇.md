@@ -628,7 +628,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 		klog.InfoS("Failed to ApplyOOMScoreAdj", "err", err)
 	}
 
-+	// 在RunKubelet前面预初始化RuntimeService(kubeDeps.RemoteRuntimeService和kubeDeps.RemoteImageService)
++	// 在RunKubelet前面预初始化RuntimeService，包括kubeDeps.RemoteRuntimeService和kubeDeps.RemoteImageService
 	err = kubelet.PreInitRuntimeService(&s.KubeletConfiguration,
 		kubeDeps, &s.ContainerRuntimeOptions,
 		s.ContainerRuntime,
@@ -655,7 +655,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 	if s.RunOnce {
 		return nil
 	}
-
++	// 通知systemd，状态改成ready
 	// If systemd is used, notify it that we have started
 	go daemon.SdNotify(false, "READY=1")
 
@@ -679,10 +679,12 @@ func PreInitRuntimeService(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		remoteImageEndpoint = remoteRuntimeEndpoint
 	}
 
++	// 通过endpoint，初始化RuntimeService
 	var err error
 	if kubeDeps.RemoteRuntimeService, err = remote.NewRemoteRuntimeService(remoteRuntimeEndpoint, kubeCfg.RuntimeRequestTimeout.Duration); err != nil {
 		return err
 	}
++	// 通过endpoint，初始化ImageService	
 	if kubeDeps.RemoteImageService, err = remote.NewRemoteImageService(remoteImageEndpoint, kubeCfg.RuntimeRequestTimeout.Duration); err != nil {
 		return err
 	}
@@ -694,6 +696,8 @@ func PreInitRuntimeService(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 ```
 
 - Run -> run -> RunKubelet
+
+代码在[`cmd/kubelet/app/server.go`](https://github.com/kubernetes/kubernetes/blob/master/cmd/kubelet/app/server.go)
 
 RunKubelet 主要流程：
 
