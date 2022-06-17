@@ -44,33 +44,33 @@ $ curl http://127.0.0.1:10255/spec/
 ![kubelet功能模块图](kubelet_功能模块图.png)
 
 
-1. PLEG(Pod Lifecycle Event Generator）PLEG 是kubelet的核心模块。PLEG 会一直调用container runtime获取本节点containers/sandboxes的信息，并与自身维护的pods cache信息进行对比，生成对应的PodLifecycleEvent，然后输出到eventChannel中，发送给kubelet syncLoop进行消费，由kubelet syncPod来触发pod同步处理过程，最终达到用户的期望状态。
+1. PLEG(Pod Lifecycle Event Generator）：PLEG 是kubelet的核心模块。PLEG 会一直调用container runtime获取本节点containers/sandboxes的信息，并与自身维护的pods cache信息进行对比，生成对应的PodLifecycleEvent，然后输出到eventChannel中，发送给kubelet syncLoop进行消费，由kubelet syncPod来触发pod同步处理过程，最终达到用户的期望状态。
 
-2. cAdvisor cAdvisor（https://github.com/google/cadvisor）是 google开发的容器监控工具，集成在kubelet中，起到收集本节点和容器的监控信息，大部分公司对容器的监控数据都是从 cAdvisor中获取的 ，cAvisor模块对外提供了interface接口，该接口也被imageManager，OOMWatcher，containerManager等所使用。
+2. cAdvisor（https://github.com/google/cadvisor）： cAdvisor是google开发的容器监控工具，集成在kubelet中，起到收集本节点和容器的监控信息，大部分公司对容器的监控数据都是从 cAdvisor中获取的 ，cAvisor模块对外提供了interface接口，该接口也被imageManager，OOMWatcher，containerManager等所使用。
 
-3. OOMWatcher系统OOM的监听器，会与cadvisor模块之间建立SystemOOM，通过 Watch方式从cadvisor那里收到的OOM信号，并产生相关事件。
+3. OOMWatcher：系统OOM的监听器，会与cadvisor模块之间建立SystemOOM，通过 Watch方式从cadvisor那里收到的OOM信号，并产生相关事件。
 
-4. probeManager probeManager依赖于 statusManager，livenessManager，containerRefManager，会定时去监控pod中容器的健康状况，当前支持两种类型的探针：livenessProbe和readinessProbe。 livenessProbe：用于判断容器是否存活，如果探测失败，kubelet 会 kill 掉该容器，并根据容器的重启策略做相应的处理。 readinessProbe：用于判断容器是否启动完成，将探测成功的容器加入到该 pod 所在 service 的 endpoints 中，反之则移除。readinessProbe 和 livenessProbe 有三种实现方式：http、tcp 以及 cmd。
+4. probeManager： probeManager依赖于 statusManager，livenessManager，containerRefManager，会定时去监控pod中容器的健康状况，当前支持两种类型的探针：livenessProbe和readinessProbe。 livenessProbe：用于判断容器是否存活，如果探测失败，kubelet 会 kill 掉该容器，并根据容器的重启策略做相应的处理。 readinessProbe：用于判断容器是否启动完成，将探测成功的容器加入到该 pod 所在 service 的 endpoints 中，反之则移除。readinessProbe 和 livenessProbe 有三种实现方式：http、tcp 以及 cmd。
 
-5. statusManager statusManager 负责维护状态信息，并把 pod 状态更新到 apiserver，但是它并不负责监控 pod 状态的变化，而是提供对应的接口供其他组件调用，比如 probeManager。
+5. statusManager：statusManager负责维护状态信息，并把 pod 状态更新到 apiserver，但是它并不负责监控 pod 状态的变化，而是提供对应的接口供其他组件调用，比如 probeManager。
 
-6. containerRefManager 容器引用的管理，相对简单的Manager，用来报告容器的创建，失败等事件，通过定义 map 来实现了 containerID 与 v1.ObjectReferece 容器引用的映射。
+6. containerRefManager：容器引用的管理，用来报告容器的创建，失败等事件，通过定义 map 来实现了 containerID 与 v1.ObjectReferece 容器引用的映射。
 
-7. evictionManager 当节点的内存、磁盘或inode等资源不足时，达到了配置的evict策略，node会变为pressure状态，此时kubelet会按照qosClass顺序来驱赶pod，以此来保证节点的稳定性。可以通过配置kubelet启动参数 --eviction-hard=来决定evict的策略值。
+7. evictionManager：当节点的内存、磁盘或inode等资源不足时，达到了配置的evict策略，node会变为pressure状态，此时kubelet会按照qosClass顺序来驱赶pod，以此来保证节点的稳定性。可以通过配置kubelet启动参数 --eviction-hard=来决定evict的策略值。
 
-8. imageGC imageGC负责node节点的镜像回收，当本地的存放镜像的本地磁盘空间达到某阈值的时候，会触发镜像的回收，删除掉不被pod所使用的镜像，回收镜像的阈值可以通过 kubelet 的启动参数 --image-gc-high-threshold 和 --image-gc-low-threshold 来设置。
+8. imageGC：imageGC负责node节点的镜像回收，当本地的存放镜像的本地磁盘空间达到某阈值的时候，会触发镜像的回收，删除掉不被pod所使用的镜像，回收镜像的阈值可以通过 kubelet 的启动参数 --image-gc-high-threshold 和 --image-gc-low-threshold 来设置。
 
-9. containerGC负责清理node节点上已消亡的container，具体的GC操作由runtime来实现。
+9. containerGC：负责清理node节点上已消亡的container，具体的GC操作由runtime来实现。
 
-10. imageManager调用kubecontainer提供的PullImage/GetImageRef/ListImages/RemoveImage/ImageStates方法来保证pod运行所需要的镜像。
+10. imageManager：调用kubecontainer提供的PullImage/GetImageRef/ListImages/RemoveImage/ImageStates方法来保证pod运行所需要的镜像。
 
-11. volumeManager 负责 node 节点上 pod 所使用 volume 的管理，volume与pod的生命周期关联，负责pod创建删除过程中volume的mount/umount/attach/detach流程，kubernetes采用volume Plugins的方式，实现存储卷的挂载等操作，内置几十种存储插件。
+11. volumeManager：负责 node 节点上 pod 所使用 volume 的管理，volume与pod的生命周期关联，负责pod创建删除过程中volume的mount/umount/attach/detach流程，kubernetes采用volume Plugins的方式，实现存储卷的挂载等操作，内置几十种存储插件。
 
-12. containerManager 负责node节点上运行的容器的cgroup配置信息，kubelet启动参数如果指定 --cgroups-per-qos的时候，kubelet会启动goroutine来周期性的更新pod的cgroup信息，维护其正确性，该参数默认为true，实现了pod的Guaranteed/BestEffort/Burstable 三种级别的Qos。
+12. containerManager：负责node节点上运行的容器的cgroup配置信息，kubelet启动参数如果指定 --cgroups-per-qos的时候，kubelet会启动goroutine来周期性的更新pod的cgroup信息，维护其正确性，该参数默认为true，实现了pod的Guaranteed/BestEffort/Burstable 三种级别的Qos。
 
-13. runtimeManager containerRuntime负责kubelet与不同的runtime实现进行对接，实现对于底层container的操作，初始化之后得到的runtime实例将会被之前描述的组件所使用。可以通过 kubelet的启动参数 --container-runtime来定义是使用docker还是rkt，默认是docker。
+13. runtimeManager：containerRuntime负责kubelet与不同的runtime实现进行对接，实现对于底层container的操作，初始化之后得到的runtime实例将会被之前描述的组件所使用。可以通过 kubelet的启动参数 --container-runtime来定义是使用docker还是rkt，默认是docker。
 
-14. podManager podManager 提供了接口来存储和访问pod的信息，维持static pod和mirror pods的关系，podManager会被statusManager/volumeManager/runtimeManager所调用，podManager 的接口处理流程里面会调用secretManager以及configMapManager。
+14. podManager：podManager 提供了接口来存储和访问pod的信息，维持static pod和mirror pods的关系，podManager会被statusManager/volumeManager/runtimeManager所调用，podManager 的接口处理流程里面会调用secretManager以及configMapManager。
 
 ## 代码入口
 
