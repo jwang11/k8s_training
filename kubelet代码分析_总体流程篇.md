@@ -468,7 +468,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 		kubeDeps.EventClient = nil
 		kubeDeps.HeartbeatClient = nil
 		klog.InfoS("Standalone mode, no API client")
-+	// client-go为kubeDeps初始化 KubeClient，EventClient，HeartbeatClient模块
++	// 用client-go为kubeDeps初始化 KubeClient，EventClient，HeartbeatClient客户端
 	case kubeDeps.KubeClient == nil, kubeDeps.EventClient == nil, kubeDeps.HeartbeatClient == nil:
 		clientConfig, closeAllConns, err := buildKubeletClientConfig(ctx, s, nodeName)
 
@@ -581,7 +581,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 			}
 		}
 
-+		// 调用NewContainerManager生成ContainerManager
++		// 生成ContainerManager，作为kubeDeps的一个成员，为后面生成真正的ContainerManager准备
 		kubeDeps.ContainerManager, err = cm.NewContainerManager(
 			kubeDeps.Mounter,
 			kubeDeps.CAdvisorInterface,
@@ -628,7 +628,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 		klog.InfoS("Failed to ApplyOOMScoreAdj", "err", err)
 	}
 
-+	// kubelet预初始化
++	// 在RunKubelet前面预初始化RuntimeService(kubeDeps.RemoteRuntimeService和kubeDeps.RemoteImageService)
 	err = kubelet.PreInitRuntimeService(&s.KubeletConfiguration,
 		kubeDeps, &s.ContainerRuntimeOptions,
 		s.ContainerRuntime,
@@ -665,6 +665,29 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 	case <-ctx.Done():
 		break
 	}
+
+	return nil
+}
+
+// PreInitRuntimeService will init runtime service before RunKubelet.
+func PreInitRuntimeService(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
+	kubeDeps *Dependencies,
+	remoteRuntimeEndpoint string,
+	remoteImageEndpoint string) error {
+	// remoteImageEndpoint is same as remoteRuntimeEndpoint if not explicitly specified
+	if remoteRuntimeEndpoint != "" && remoteImageEndpoint == "" {
+		remoteImageEndpoint = remoteRuntimeEndpoint
+	}
+
+	var err error
+	if kubeDeps.RemoteRuntimeService, err = remote.NewRemoteRuntimeService(remoteRuntimeEndpoint, kubeCfg.RuntimeRequestTimeout.Duration); err != nil {
+		return err
+	}
+	if kubeDeps.RemoteImageService, err = remote.NewRemoteImageService(remoteImageEndpoint, kubeCfg.RuntimeRequestTimeout.Duration); err != nil {
+		return err
+	}
+
+	kubeDeps.useLegacyCadvisorStats = cadvisor.UsingLegacyCadvisorStats(remoteRuntimeEndpoint)
 
 	return nil
 }
