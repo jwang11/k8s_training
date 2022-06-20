@@ -72,32 +72,7 @@ $ curl http://127.0.0.1:10255/spec/
 
 14. podManager：podManager 提供了接口来存储和访问pod的信息，维持static pod和mirror pods的关系，podManager会被statusManager/volumeManager/runtimeManager所调用，podManager 的接口处理流程里面会调用secretManager以及configMapManager。
 
-## 代码入口
 
-Kubelet 的主函数入口在 [`cmd/kubelet/kubelet.go`](https://github.com/kubernetes/kubernetes/blob/master/cmd/kubelet/kubelet.go)中
-```diff
-func main() {
-	command := app.NewKubeletCommand()
-
-	// kubelet uses a config file and does its own special
-	// parsing of flags and that config file. It initializes
-	// logging after it is done with that. Therefore it does
-	// not use cli.Run like other, simpler commands.
-	code := run(command)
-	os.Exit(code)
-}
-
-func run(command *cobra.Command) int {
-	defer logs.FlushLogs()
-	rand.Seed(time.Now().UnixNano())
-
-	command.SetGlobalNormalizationFunc(cliflag.WordSepNormalizeFunc)
-	if err := command.Execute(); err != nil {
-		return 1
-	}
-	return 0
-}
-```
 ## 总体流程
 ```diff
 main                                                                            // cmd/kubelet/kubelet.go
@@ -139,6 +114,34 @@ main                                                                            
         |    |-k.ListenAndServe
         |
         |-go http.ListenAndServe(healthz)
+```
+
+## 代码入口
+
+Kubelet的主函数入口在 [`cmd/kubelet/kubelet.go`](https://github.com/kubernetes/kubernetes/blob/master/cmd/kubelet/kubelet.go)中
+```diff
+func main() {
++	// Kubelet命令
+	command := app.NewKubeletCommand()
+
+	// kubelet uses a config file and does its own special
+	// parsing of flags and that config file. It initializes
+	// logging after it is done with that. Therefore it does
+	// not use cli.Run like other, simpler commands.
+	code := run(command)
+	os.Exit(code)
+}
+
+func run(command *cobra.Command) int {
+	defer logs.FlushLogs()
+	rand.Seed(time.Now().UnixNano())
+
+	command.SetGlobalNormalizationFunc(cliflag.WordSepNormalizeFunc)
+	if err := command.Execute(); err != nil {
+		return 1
+	}
+	return 0
+}
 ```
 ## kubelet启动命令
 
