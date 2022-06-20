@@ -671,7 +671,10 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 
 	return nil
 }
+```
 
+>> PreInitRuntimeService
+```diff
 // PreInitRuntimeService will init runtime service before RunKubelet.
 func PreInitRuntimeService(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	kubeDeps *Dependencies,
@@ -698,11 +701,13 @@ func PreInitRuntimeService(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 }
 ```
 
-- Run -> run -> RunKubelet
+## RunKubelet
+
+调用过程是Run->run->RunKubelet
 
 代码在[`cmd/kubelet/app/server.go`](https://github.com/kubernetes/kubernetes/blob/master/cmd/kubelet/app/server.go)
 
-RunKubelet 主要流程：
+RunKubelet主要流程：
 
 1. 获取主机名<br>
 2. 建立并初始化 event recorder <br>
@@ -826,7 +831,11 @@ func RunKubelet(kubeServer *options.KubeletServer, kubeDeps *kubelet.Dependencie
 	}
 	return nil
 }
+```
 
+>> createAndInitKubelet
+
+```diff
 func createAndInitKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	kubeDeps *kubelet.Dependencies,
 	crOptions *config.ContainerRuntimeOptions,
@@ -899,7 +908,10 @@ func createAndInitKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 
 	return k, nil
 }
+```
 
+>> startKubelet
+```diff
 func startKubelet(k kubelet.Bootstrap, podCfg *config.PodConfig, kubeCfg *kubeletconfiginternal.KubeletConfiguration, kubeDeps *kubelet.Dependencies, enableServer bool) {
 +	// kubelet执行核心
 	// start the kubelet
