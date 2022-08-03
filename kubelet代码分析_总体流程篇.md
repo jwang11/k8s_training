@@ -437,7 +437,7 @@ func run(ctx context.Context, s *options.KubeletServer, kubeDeps *kubelet.Depend
 		metrics.SetShowHidden()
 	}
 
-+	// 判断是否为standalone模式
++	// 判断是否为standalone模式（s.KubeConfig是specifying how to connect to the API server. Providing --kubeconfig enables API server mode）
 	// About to get clients and such, detect standaloneMode
 	standaloneMode := true
 	if len(s.KubeConfig) > 0 {
