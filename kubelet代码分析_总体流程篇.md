@@ -718,7 +718,7 @@ RunKubelet主要流程：
   - privilegedSources 由以上三个资源配置构成
 4. 调用createAndInitKubelet生成kublet结构，它包含了各类Manager组件 
 5. 若设置 runonce 参数，则只拉取一次容器组配置，并在启动容器组后退出，否则将以server形式保持
-对于runonce，首先创建所需的目录，监听 pod update 信息，得到 pod 信息后，创建pod 并返回他们的状态
+对于runonce，首先创建所需的目录，监听pod update信息，得到pod信息后，创建pod并返回他们的状态
 6. 以server模式启动，调用startKubelet。
 
 
@@ -869,7 +869,7 @@ func createAndInitKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 ) (k kubelet.Bootstrap, err error) {
 	// TODO: block until all sources have delivered at least one update to the channel, or break the sync loop
 	// up into "per source" synchronizations
-+	// 调用NewMainKubelet创建kubelet，它包含各种Manager组件
++	// 调用NewMainKubelet创建kubelet，它包含各种Manager组件（详见下一节）
 	k, err = kubelet.NewMainKubelet(kubeCfg,
 		kubeDeps,
 		crOptions,
@@ -913,7 +913,7 @@ func createAndInitKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 >> startKubelet
 ```diff
 func startKubelet(k kubelet.Bootstrap, podCfg *config.PodConfig, kubeCfg *kubeletconfiginternal.KubeletConfiguration, kubeDeps *kubelet.Dependencies, enableServer bool) {
-+	// kubelet执行核心
++	// kubelet执行核心（详见后面分析）
 	// start the kubelet
 	go k.Run(podCfg.Updates())
 
