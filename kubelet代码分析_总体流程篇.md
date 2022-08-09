@@ -1458,9 +1458,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 }
 ```
 
->> KubeGenericRuntime接口
-
-这就是Kubenetes的CRI接口
+>> Kubenetes的CRI接口 - KubeGenericRuntime
 ```diff
 // KubeGenericRuntime is a interface contains interfaces for container runtime and command.
 type KubeGenericRuntime interface {
@@ -1564,6 +1562,82 @@ type CommandRunner interface {
 }
 ```
 
+>> Podworker
+```diff
+type podWorkers struct {
+	// Protects all per worker fields.
+	podLock sync.Mutex
+	// podsSynced is true once the pod worker has been synced at least once,
+	// which means that all working pods have been started via UpdatePod().
+	podsSynced bool
+	// Tracks all running per-pod goroutines - per-pod goroutine will be
+	// processing updates received through its corresponding channel.
+	podUpdates map[types.UID]chan podWork
+	// Tracks the last undelivered work item for this pod - a work item is
+	// undelivered if it comes in while the worker is working.
+	lastUndeliveredWorkUpdate map[types.UID]podWork
+	// Tracks by UID the termination status of a pod - syncing, terminating,
+	// terminated, and evicted.
+	podSyncStatuses map[types.UID]*podSyncStatus
+	// Tracks all uids for started static pods by full name
+	startedStaticPodsByFullname map[string]types.UID
+	// Tracks all uids for static pods that are waiting to start by full name
+	waitingToStartStaticPodsByFullname map[string][]types.UID
+
+	workQueue queue.WorkQueue
+
+	// This function is run to sync the desired state of pod.
+	// NOTE: This function has to be thread-safe - it can be called for
+	// different pods at the same time.
+
+	syncPodFn            syncPodFnType
+	syncTerminatingPodFn syncTerminatingPodFnType
+	syncTerminatedPodFn  syncTerminatedPodFnType
+
+	// workerChannelFn is exposed for testing to allow unit tests to impose delays
+	// in channel communication. The function is invoked once each time a new worker
+	// goroutine starts.
+	workerChannelFn func(uid types.UID, in chan podWork) (out <-chan podWork)
+
+	// The EventRecorder to use
+	recorder record.EventRecorder
+
+	// backOffPeriod is the duration to back off when there is a sync error.
+	backOffPeriod time.Duration
+
+	// resyncInterval is the duration to wait until the next sync.
+	resyncInterval time.Duration
+
+	// podCache stores kubecontainer.PodStatus for all pods.
+	podCache kubecontainer.Cache
+}
+
+func newPodWorkers(
+	syncPodFn syncPodFnType,
+	syncTerminatingPodFn syncTerminatingPodFnType,
+	syncTerminatedPodFn syncTerminatedPodFnType,
+	recorder record.EventRecorder,
+	workQueue queue.WorkQueue,
+	resyncInterval, backOffPeriod time.Duration,
+	podCache kubecontainer.Cache,
+) PodWorkers {
+	return &podWorkers{
+		podSyncStatuses:                    map[types.UID]*podSyncStatus{},
+		podUpdates:                         map[types.UID]chan podWork{},
+		lastUndeliveredWorkUpdate:          map[types.UID]podWork{},
+		startedStaticPodsByFullname:        map[string]types.UID{},
+		waitingToStartStaticPodsByFullname: map[string][]types.UID{},
+		syncPodFn:                          syncPodFn,
+		syncTerminatingPodFn:               syncTerminatingPodFn,
+		syncTerminatedPodFn:                syncTerminatedPodFn,
+		recorder:                           recorder,
+		workQueue:                          workQueue,
+		resyncInterval:                     resyncInterval,
+		backOffPeriod:                      backOffPeriod,
+		podCache:                           podCache,
+	}
+}
+```
 ## 运行Kubelet
 RunKubelet -> startKubelet -> k.Run
 
