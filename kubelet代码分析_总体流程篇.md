@@ -931,8 +931,9 @@ func startKubelet(k kubelet.Bootstrap, podCfg *config.PodConfig, kubeCfg *kubele
 ```
 
 ## 创建Kubelet
-调用逻辑 RunKubelet -> createAndInitKubelet -> NewMainKubelet生成Kubelet及相应Manager组件
-代码 https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet.go
+RunKubelet -> createAndInitKubelet -> NewMainKubelet
+
+生成Kubelet及相应Manager组件，代码 https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet.go
 
 ```diff
 // NewMainKubelet instantiates a new Kubelet object along with all the required internal modules.
