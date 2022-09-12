@@ -1718,6 +1718,8 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 }
 ```
 
+至此，初始化部分就结束了。
+
 - 进入syncLoop循环来处理Pod的状态变化
 
 kubelet的主循环方法。它从不同的管道(file，http，apiserver)监听pod的变化，汇聚起来。当有新的变化发生时，它会调用对应的函数，保证pod处于期望的状态
