@@ -778,10 +778,9 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan podWork) {
 }
 ```
 
--  p.syncPodFn(Kubelet->syncPod)
+##  Sync Pod
 
-Sync Pod的逻辑
-
+p.syncPodFn(Kubelet->syncPod)，其逻辑是
 1. 如果是 pod 创建事件，会记录一些 pod latency 相关的 metrics；
 2. 生成一个 v1.PodStatus 对象,Pod的状态包括这些 Pending Running Succeeded Failed Unknown
 3. PodStatus 生成之后，将发送给 Pod status manager
