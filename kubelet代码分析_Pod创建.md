@@ -1307,6 +1307,8 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, podStatus *kubecontaine
 ## 创建并启动pod Sandbox
 
 ### 创建pod sandbox
+
+准备sandbox config，最终是调用CRI server（containerd中）的RunPodSandbox
 ```diff
 // createPodSandbox creates a pod sandbox and returns (podSandBoxID, message, error).
 func (m *kubeGenericRuntimeManager) createPodSandbox(pod *v1.Pod, attempt uint32) (string, string, error) {
@@ -1337,7 +1339,7 @@ func (m *kubeGenericRuntimeManager) createPodSandbox(pod *v1.Pod, attempt uint32
 		}
 	}
 
-+	// gRPC调用CRI server的RunPodSandbox
++	// 调用remote runtime service中的RunPodSandbox
 	podSandBoxID, err := m.runtimeService.RunPodSandbox(podSandboxConfig, runtimeHandler)
 	if err != nil {
 		message := fmt.Sprintf("Failed to create sandbox for pod %q: %v", format.Pod(pod), err)
@@ -1402,7 +1404,7 @@ func (r *remoteRuntimeService) RunPodSandbox(config *runtimeapi.PodSandboxConfig
 	return podSandboxID, nil
 }
 ```
-### 启动Sandbox Pod
+### 启动Sandbox Pod里的container
 
 ```diff
 // startContainer starts a container and returns a message indicates why it is failed on error.
