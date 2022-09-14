@@ -1304,7 +1304,9 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, podStatus *kubecontaine
 }
 ```
 
-## Create pod Sandbox
+## 创建并启动pod Sandbox
+
+### 创建pod sandbox
 ```diff
 // createPodSandbox creates a pod sandbox and returns (podSandBoxID, message, error).
 func (m *kubeGenericRuntimeManager) createPodSandbox(pod *v1.Pod, attempt uint32) (string, string, error) {
@@ -1400,7 +1402,7 @@ func (r *remoteRuntimeService) RunPodSandbox(config *runtimeapi.PodSandboxConfig
 	return podSandboxID, nil
 }
 ```
-## start Container
+### 启动Sandbox Pod
 
 ```diff
 // startContainer starts a container and returns a message indicates why it is failed on error.
