@@ -46,7 +46,7 @@ func NewSharedIndexInformer(lw ListerWatcher, exampleObject runtime.Object, defa
 +               // 可以想象成每个对象键是Namespace/Name，每个索引键是Namespace，即按照Namesapce分类
 +               // 因为objType决定了只有一种类型对象，所以Namesapce是最大的分类
 		indexer:                         NewIndexer(DeletionHandlingMetaNamespaceKeyFunc, indexers),
-+               // 下面这两主要就是给Controller用，确切的说是给Reflector用的，其中objectType定义了需要reflect的对象类型
++               // 下面这两主要就是给Reflector用的，其中objectType定义了需要reflect的对象类型
 		listerWatcher:                   lw,
 		objectType:                      exampleObject,
 +               // 无论是否需要定时同步，SharedInformer都提供了一个默认的同步时间，当然这个是外部设置的    
@@ -130,8 +130,8 @@ func (s *sharedIndexInformer) AddEventHandlerWithResyncPeriod(handler ResourceEv
 			klog.Warningf("resyncPeriod %v is too small. Changing it to the minimum allowed value of %v", resyncPeriod, minimumResyncPeriod)
 			resyncPeriod = minimumResyncPeriod
 		}
-+        	// SharedInformer管理了很多处理器，每个处理器都有自己的同步周期，所以此处要统一成一个，称之为对齐
-+        	// SharedInformer会选择所有处理器中最小的那个作为所有处理器的同步周期，称为对齐后的同步周期
++        	// SharedInformer通过processor管理了很多listner，每个listener都有自己的同步周期，所以此处要统一成一个，称之为对齐
++        	// SharedInformer会选择最小的那个作为整体的同步周期，称为对齐后的同步周期
 +        	// 此处就要判断是不是比当前对齐后的同步周期还要小
 		if resyncPeriod < s.resyncCheckPeriod {
 +			// 如果已经启动了，那么只能用和大家一样的周期		
