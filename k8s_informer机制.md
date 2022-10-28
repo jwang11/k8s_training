@@ -73,6 +73,7 @@ func NewSharedIndexInformer(lw ListerWatcher, exampleObject runtime.Object, defa
 // notifications to each of the informer's clients.
 type sharedIndexInformer struct {
 	indexer    Indexer
++	// 这个是low level的controller，负责处理底层对象的ListWatch，不要和high level的业务controller弄混	
 	controller Controller
 +	// sharedIndexInformer把ResourceEventHandler进行了封装，并统一由sharedProcessor管理，
 	processor             *sharedProcessor
@@ -152,6 +153,7 @@ func (s *sharedIndexInformer) AddEventHandlerWithResyncPeriod(handler ResourceEv
 	listener := newProcessListener(handler, resyncPeriod, determineResyncPeriod(resyncPeriod, s.resyncCheckPeriod), s.clock.Now(), initialBufferSize)
 
 	if !s.started {
++		// 一个informer可以有多个listener，对应多个high level的业务controller	
 		s.processor.addListener(listener)
 		return
 	}
