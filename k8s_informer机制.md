@@ -11,7 +11,7 @@
 ## Informer流程分析
 ![Informer代码流程图](informer机制流程图.png)
 
-在k8s里，SharedInformer是Informer机制的核心，内置controller, 而reflector就包含在controller里。sharedIndexInformer.Run->controller.Run->控制着资源的监控和业务逻辑的执行。
+在k8s里，通常是从informer工厂（sharedInformerFactory）开始，创建出各种对象的单例sharedIndexInformer（e.g. pod,deployment）。SharedInformer是Informer机制的核心，内置controller, 而reflector就包含在controller里。sharedIndexInformer.Run->controller.Run->控制着资源的监控和业务逻辑的执行。
 
 
 ## Informer工厂 - sharedInformerFactory
