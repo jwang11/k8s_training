@@ -147,14 +147,16 @@ func Run(c *config.CompletedConfig, stopCh <-chan struct{}) error {
 	// No leader election, run directly
 	if !c.ComponentConfig.Generic.LeaderElection.LeaderElect {
 		ctx, _ := wait.ContextForChannel(stopCh)
++		// 注意第二个参数，它是controller的初始化构造器		
 		run(ctx, saTokenControllerInitFunc, NewControllerInitializers)
 		return nil
 	}
 ...
 ```
 
-## controller manager初始化
+## controllers的初始化
 
+构造Initializers，返回 map[string]InitFunc，包含了每一个controller的初始化函数
 ```diff
 // NewControllerInitializers is a public map of named controller groups (you can start more than one in an init func)
 // paired to their InitFunc.  This allows for structured downstream composition and subdivision.
