@@ -11,11 +11,11 @@
 ## Informer流程分析
 ![Informer代码流程图](informer机制流程图.png)
 
-在k8s里，通常是从informer工厂（sharedInformerFactory）开始，创建出各种对象的单例sharedIndexInformer（e.g. pod,deployment）。SharedInformer是Informer机制的核心，内置controller, 而reflector就包含在controller里。sharedIndexInformer.Run->controller.Run->控制着资源的监控和业务逻辑的执行。
+在k8s里，各种对象的informer（e.g. pod, deployment）通常是从informer工厂（sharedInformerFactory）创建出来的，返回ShareIndexInformer接口对象。SharedIndexInformer是Informer机制的核心，内置controller, 而reflector就包含在controller里。sharedIndexInformer.Run->controller.Run->控制着资源的监控和业务逻辑的执行。
 
 
 ## Informer工厂 - sharedInformerFactory
-每个SharedInformer其实只负责一种对象，在构造SharedInformer的时候指定了对象类型。SharedInformerFactory可以构造Kubernetes里所有对象的单例Informer，而且主要用在controller-manager这个服务中。因为controller-manager负责管理绝大部分controller，每类controller不仅需要自己关注的对象的informer，同时也可能需要其他对象的Informer(比如ReplicationController也需要PodInformer,否则他无法感知Pod的启动和关闭，也就达不到监控的目的了)，所以一个SharedInformerFactory可以让所有的controller共享使用同一个类对象的Informer。
+每个SharedIndexInformer只负责一种对象，在构造的时候指定了对象类型。SharedInformerFactory可以构造Kubernetes里所有对象的单例Informer，而且主要用在controller-manager这个服务中。因为controller-manager负责管理绝大部分controller，每类controller不仅需要自己关注的对象的informer，同时也可能需要其他对象的Informer(比如ReplicationController也需要PodInformer,否则他无法感知Pod的启动和关闭，也就达不到监控的目的了)，所以一个SharedInformerFactory可以让所有的controller共享使用同一个类对象的Informer。
 
 
 - sharedInformerFactory类型
@@ -112,7 +112,7 @@ func NewPodInformer(client kubernetes.Interface, namespace string, resyncPeriod 
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
 func NewFilteredPodInformer(client kubernetes.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-+	// 这里引入SharedIndexInformer，后面会详细分析
++	// 这里创建出SharedIndexInformer，后面会详细分析
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
@@ -148,7 +148,7 @@ func (f *podInformer) Lister() v1.PodLister {
 ```
 
 
-## SharedInformer是整个Informer机制的框架
+## SharedIndexInformer是整个Informer机制的框架
 - client-go实现了两个创建SharedInformer的接口（码源自client-go/tools/cache/shared_informer.go）
 ```diff
 + // lw:这个是apiserver客户端相关的，用于Reflector从apiserver获取资源，所以需要外部提供
