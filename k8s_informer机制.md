@@ -11,7 +11,7 @@
 ## Informer流程分析
 ![Informer代码流程图](informer机制流程图.png)
 
-在k8s里，各种对象的informer（e.g. pod, deployment）通常是从informer工厂（sharedInformerFactory）创建出来的，返回ShareIndexInformer接口对象。SharedIndexInformer是Informer机制的核心，内置controller, 而reflector就包含在controller里。sharedIndexInformer.Run->controller.Run->控制着资源的监控和业务逻辑的执行。
+在k8s里，各种对象的informer（e.g. pod, deployment）通常是从informer工厂（sharedInformerFactory）创建出来的，统一返回接口为SharedIndexInformer的对象。SharedIndexInformer是Informer机制的核心，内置controller, 而reflector就包含在controller里。sharedIndexInformer.Run->controller.Run->控制着资源的监控和业务逻辑的执行。
 
 
 ## Informer工厂 - sharedInformerFactory
@@ -146,7 +146,6 @@ func (f *podInformer) Lister() v1.PodLister {
 	return v1.NewPodLister(f.Informer().GetIndexer())
 }
 ```
-
 
 ## SharedIndexInformer是整个Informer机制的框架
 - client-go实现了两个创建SharedInformer的接口（码源自client-go/tools/cache/shared_informer.go）
