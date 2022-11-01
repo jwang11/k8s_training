@@ -210,3 +210,20 @@ func NewControllerInitializers(loopMode ControllerLoopMode) map[string]InitFunc 
 	return controllers
 }
 ```
+
+以deployment为例，初始化函数是
+```diff
+func startDeploymentController(ctx context.Context, controllerContext ControllerContext) (controller.Interface, bool, error) {
+	dc, err := deployment.NewDeploymentController(
+		controllerContext.InformerFactory.Apps().V1().Deployments(),
+		controllerContext.InformerFactory.Apps().V1().ReplicaSets(),
+		controllerContext.InformerFactory.Core().V1().Pods(),
+		controllerContext.ClientBuilder.ClientOrDie("deployment-controller"),
+	)
+	if err != nil {
+		return nil, true, fmt.Errorf("error creating Deployment controller: %v", err)
+	}
+	go dc.Run(ctx, int(controllerContext.ComponentConfig.DeploymentController.ConcurrentDeploymentSyncs))
+	return nil, true, nil
+}
+```
