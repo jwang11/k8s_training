@@ -319,6 +319,7 @@ func StartControllers(ctx context.Context, controllerCtx ControllerContext, star
 		time.Sleep(wait.Jitter(controllerCtx.ComponentConfig.Generic.ControllerStartInterval.Duration, ControllerStartJitter))
 
 		klog.V(1).Infof("Starting %q", controllerName)
++		// 运行每个controller自己的初始化函数		
 		ctrl, started, err := initFn(ctx, controllerCtx)
 		if err != nil {
 			klog.Errorf("Error starting %q", controllerName)
