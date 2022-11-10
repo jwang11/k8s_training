@@ -50,6 +50,7 @@ type DeploymentController struct {
 	queue workqueue.RateLimitingInterface
 }
 
++	// 参数包括了三个Informer模板 - DeployInformer，ReplicateInformer，PodInformer
 // NewDeploymentController creates a new DeploymentController.
 func NewDeploymentController(dInformer appsinformers.DeploymentInformer, rsInformer appsinformers.ReplicaSetInformer, podInformer coreinformers.PodInformer, client clientset.Interface) (*DeploymentController, error) {
 	eventBroadcaster := record.NewBroadcaster()
@@ -101,7 +102,87 @@ func NewDeploymentController(dInformer appsinformers.DeploymentInformer, rsInfor
 	return dc, nil
 }
 ```
+- DeployInformer模板
+```diff
+type deploymentInformer struct {
+	factory          internalinterfaces.SharedInformerFactory
+	tweakListOptions internalinterfaces.TweakListOptionsFunc
+	namespace        string
+}
 
+// NewDeploymentInformer constructs a new informer for Deployment type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewDeploymentInformer(client kubernetes.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredDeploymentInformer(client, namespace, resyncPeriod, indexers, nil)
+}
+
+// NewFilteredDeploymentInformer constructs a new informer for Deployment type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewFilteredDeploymentInformer(client kubernetes.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+	return cache.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.AppsV1().Deployments(namespace).List(context.TODO(), options)
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.AppsV1().Deployments(namespace).Watch(context.TODO(), options)
+			},
+		},
+		&appsv1.Deployment{},
+		resyncPeriod,
+		indexers,
+	)
+}
+
+func (f *deploymentInformer) defaultInformer(client kubernetes.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredDeploymentInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+}
+
++ // 产生真正的informer - SharedIndexInformer
+func (f *deploymentInformer) Informer() cache.SharedIndexInformer {
++	// 传入两个参数，一个用来标注对象类型，另一个是生成SharedIndexInformer的实现
+	return f.factory.InformerFor(&appsv1.Deployment{}, f.defaultInformer)
+}
+
+func (f *deploymentInformer) Lister() v1.DeploymentLister {
+	return v1.NewDeploymentLister(f.Informer().GetIndexer())
+}
+```
+
+InformerFor实现
+```diff
+// InternalInformerFor returns the SharedIndexInformer for obj using an internal
+// client.
+func (f *sharedInformerFactory) InformerFor(obj runtime.Object, newFunc internalinterfaces.NewInformerFunc) cache.SharedIndexInformer {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	informerType := reflect.TypeOf(obj)
+	informer, exists := f.informers[informerType]
+	if exists {
+		return informer
+	}
+
+	resyncPeriod, exists := f.customResync[informerType]
+	if !exists {
+		resyncPeriod = f.defaultResync
+	}
+
++	// newFunc就是informer模板的defaultInformer
+	informer = newFunc(f.client, resyncPeriod)
+	f.informers[informerType] = informer
+
+	return informer
+}
+```
 - EventHandler
 
 三种EventHandler，分别对应Deployment，ReplicaSet和Pod
