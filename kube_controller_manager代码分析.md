@@ -215,7 +215,7 @@ func CreateControllerContext(s *config.CompletedConfig, rootClientBuilder, clien
 }
 ```
 
-## controllers的初始化
+## controllers的初始化函数
 
 构造Initializers，返回 map[string]InitFunc，包含了每一个controller的初始化函数
 ```diff
@@ -272,7 +272,7 @@ func NewControllerInitializers(loopMode ControllerLoopMode) map[string]InitFunc 
 }
 ```
 
-以deployment为例，初始化函数是
+以deployment为例，初始化函数是startDeploymentController
 ```diff
 func startDeploymentController(ctx context.Context, controllerContext ControllerContext) (controller.Interface, bool, error) {
 	dc, err := deployment.NewDeploymentController(
