@@ -15,6 +15,8 @@ deployment的本质是控制replicaSet，replicaSet会控制pod，然后由contr
 ## Deployment Controller
 ![Deployment Controller代码流程图](deployment_controller_workflow.png)
 代码来自https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/deployment/deployment_controller.go
+
+在kube-controller-manager文章中分析过，deployment controller的初始化函数是startDeploymentController，该函数会调用NewDeploymentController
 ```diff
 // DeploymentController is responsible for synchronizing Deployment objects stored
 // in the system with actual running replica sets and pods.
