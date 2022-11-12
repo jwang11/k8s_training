@@ -70,7 +70,7 @@ func startDeploymentController(ctx context.Context, controllerContext Controller
 	return nil, true, nil
 }
 
-+	// 参数包括了三个Informer模板 - DeployInformer，ReplicateInformer，PodInformer
++	// 该函数真正生成Deployment Controller，参数包括了三个Informer模板 - DeployInformer，ReplicateInformer，PodInformer
 // NewDeploymentController creates a new DeploymentController.
 func NewDeploymentController(dInformer appsinformers.DeploymentInformer, rsInformer appsinformers.ReplicaSetInformer, podInformer coreinformers.PodInformer, client clientset.Interface) (*DeploymentController, error) {
 	eventBroadcaster := record.NewBroadcaster()
@@ -121,8 +121,32 @@ func NewDeploymentController(dInformer appsinformers.DeploymentInformer, rsInfor
 	dc.podListerSynced = podInformer.Informer().HasSynced
 	return dc, nil
 }
+
+func (dc *DeploymentController) Run(ctx context.Context, workers int) {
+	defer utilruntime.HandleCrash()
+
+	// Start events processing pipeline.
+	dc.eventBroadcaster.StartStructuredLogging(0)
+	dc.eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: dc.client.CoreV1().Events("")})
+	defer dc.eventBroadcaster.Shutdown()
+
+	defer dc.queue.ShutDown()
+
+	klog.InfoS("Starting controller", "controller", "deployment")
+	defer klog.InfoS("Shutting down controller", "controller", "deployment")
+
+	if !cache.WaitForNamedCacheSync("deployment", ctx.Done(), dc.dListerSynced, dc.rsListerSynced, dc.podListerSynced) {
+		return
+	}
+
+	for i := 0; i < workers; i++ {
+		go wait.UntilWithContext(ctx, dc.worker, time.Second)
+	}
+
+	<-ctx.Done()
+}
 ```
-- DeployInformer模板
+- Deployment Informer模板
 ```diff
 type deploymentInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
