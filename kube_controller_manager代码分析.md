@@ -140,7 +140,7 @@ func Run(c *config.CompletedConfig, stopCh <-chan struct{}) error {
 			klog.Fatalf("error starting controllers: %v", err)
 		}
 
-+		// 启动InformerFactory
++		// 启动InformerFactory，把所有informer启动起来
 		controllerContext.InformerFactory.Start(stopCh)
 		controllerContext.ObjectOrMetadataInformerFactory.Start(stopCh)
 		close(controllerContext.InformersStarted)
