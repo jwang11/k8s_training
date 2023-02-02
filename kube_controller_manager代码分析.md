@@ -136,6 +136,7 @@ func Run(c *config.CompletedConfig, stopCh <-chan struct{}) error {
 		}
 +		// 生成Controller初始化Map，注意initializerFunc是传入的参数，一般情况下=NewControllerInitializers		
 		controllerInitializers := initializersFunc(controllerContext.LoopMode)
++		// 启动controllers		
 		if err := StartControllers(ctx, controllerContext, startSATokenController, controllerInitializers, unsecuredMux, healthzHandler); err != nil {
 			klog.Fatalf("error starting controllers: %v", err)
 		}
