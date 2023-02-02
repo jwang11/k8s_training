@@ -134,7 +134,7 @@ func Run(c *config.CompletedConfig, stopCh <-chan struct{}) error {
 		if err != nil {
 			klog.Fatalf("error building controller context: %v", err)
 		}
-+		// 生成Controller初始化Map，注意initializerFunc =  NewControllerInitializers		
++		// 生成Controller初始化Map，注意initializerFunc是传入的参数，一般情况下=NewControllerInitializers		
 		controllerInitializers := initializersFunc(controllerContext.LoopMode)
 		if err := StartControllers(ctx, controllerContext, startSATokenController, controllerInitializers, unsecuredMux, healthzHandler); err != nil {
 			klog.Fatalf("error starting controllers: %v", err)
@@ -151,7 +151,7 @@ func Run(c *config.CompletedConfig, stopCh <-chan struct{}) error {
 	// No leader election, run directly
 	if !c.ComponentConfig.Generic.LeaderElection.LeaderElect {
 		ctx, _ := wait.ContextForChannel(stopCh)
-+		// 注意第二个参数，它是controller的初始化构造器		
++		// 注意第三个参数，它是controller的初始化构造器		
 		run(ctx, saTokenControllerInitFunc, NewControllerInitializers)
 		return nil
 	}
