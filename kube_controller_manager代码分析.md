@@ -160,7 +160,9 @@ func Run(c *config.CompletedConfig, stopCh <-chan struct{}) error {
 }
 ```
 
->> ControllerContext
+>> ControllerContext里包括了什么呢？
+
+ControllerContext包含所有controller运行需要的环境以及配置信息，每个controller初始化函数都会传入该结构
 ```diff
 // CreateControllerContext creates a context struct containing references to resources needed by the
 // controllers such as the cloud provider and clientBuilder. rootClientBuilder is only used for
